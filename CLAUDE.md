@@ -77,8 +77,27 @@ Writers get catalog-item documents through `writer.write(doc)`. `writer/factory.
 - Lead API routes live in two `register(app, load_cities)` modules: `leads_api.py` adds `/api/leads/*`, and `classic_api.py` adds the legacy dashboard's `/api/{start,status,results,download,history,…}` (`job.py` `ParseJob`, `history.py`).
 - `logs.py` `ListLogHandler` feeds both jobs' live logs.
 - `leads_job.py` `LeadsJob`: one run at a time on a background thread. For each selected city it builds a 2GIS search URL, runs the parser into a `LeadsWriter` staging base under `user_path(is_config=False)/runs/<timestamp>` (earlier runs are wiped), and collects events. The UI polls `/api/leads/status?cursor=N` (also `busy`, `resumable`, `params`). `stop()` marks the run stopped at once and closes Chrome on a side thread; `resume()` (`/api/leads/resume`) continues from the saved `Progress` (city, `MainParser.page`, firms done) with the same writer, which skips firms seen before via `skip_firm`; `clear()` (`/api/leads/clear`) wipes the run. `LeadsWriter.cancelled` turns an error during a stop into `RunCancelled` instead of a skipped firm. The search form is saved (localStorage and account `form`) only when a search is started or resumed (`searchForm` in `app.js`); unsent edits are reverted when the page changes or reloads. `export(target, slugs)` replays `raw` into the chosen folder and refuses a folder whose `outreach.csv` header belongs to another sphere.
-- Frontend: plain static files with no build step. Alpine.js and Motion are vendored in `static/app/vendor/`. Logic lives in `app.js`, layout in `index.html`, styles in `app.css`. `sw.js` is a network-first service worker that caches the shell. Bump `CACHE` in `sw.js` when the shell file list changes.
+- Frontend: plain static files with no build step. Alpine.js, Motion and the Lucide icon sprite (`icons.svg`) are vendored in `static/app/vendor/`. Logic lives in `app.js`, layout in `index.html`, styles in `app.css`. `sw.js` is a network-first service worker that caches the shell. Bump `CACHE` in `sw.js` when the shell file list or the icon sprite changes.
 - `pick-folder` opens the native macOS folder dialog through `osascript`. Other platforms must type a path.
+
+## UI work (any change in `web/static/app/`)
+
+Every new screen, window, button or text follows the design system; read these before touching the UI:
+- `DESIGN.md` (repo root, Impeccable/DESIGN.md format): tokens, typography, layout zones, shapes, the component
+  classes in `app.css` and the JS helpers in `app.js` (`WINDOWS`/`trapTab` focus handling, `showFormError`, `notify`,
+  `plural`/`leadsWord`, `formatDate`, `radioKeys`, `toggleMore`, `setTheme`). Build from these; add a token or class
+  only when it repeats three times with one meaning, and define a new color token in all three theme blocks.
+- `docs/UX-RULES.md`: button levels (one primary per area, danger only for irreversible actions, channel colors only
+  as labels), window types (drawer / dialog / toast / inline error), screen zones, the copy glossary (verb + object,
+  Russian sentence case), Lucide icons (local sprite only, one icon per action, icon + text for main actions), theme,
+  states, and §8, the checklist for a new feature.
+- `docs/UX-AUDIT.md` records past decisions; `docs/ux/before|after/` hold reference screenshots.
+
+Check a UI change before committing: Playwright screenshots at 1440 and 375 in light and dark (no horizontal scroll
+at 375), `/web-design-guidelines` on the changed `app/` files and Impeccable `audit` (detector:
+`.claude/skills/impeccable/scripts/impeccable detect --json leadbombing/web/static/app/index.html`) with no new
+findings, Impeccable `critique` for a new screen and `polish` at the end. Keep the in-app «Документация» and
+`docs/LOGIC.md` in sync.
 
 ## Tests to keep green
 Golden tests compare output byte for byte against `tests/fixtures/*_golden/`. A missing golden is recorded on the first run and that test is skipped. Re-record only when a format change is intended and approved.

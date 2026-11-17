@@ -69,6 +69,7 @@ CLI без веб-интерфейса и без Supabase:
 - [docs/COMMANDS.md](docs/COMMANDS.md) — команды: запуск, тесты, линтеры, CLI-флаги
 - [docs/ENV.md](docs/ENV.md) — переменные окружения
 - [docs/STRUCTURE.md](docs/STRUCTURE.md) — структура проекта
+- [DESIGN.md](DESIGN.md) и [docs/UX-RULES.md](docs/UX-RULES.md) — дизайн-система и правила интерфейса для новых экранов
 - [CHANGELOG.md](CHANGELOG.md) — история изменений
 
 ## Лицензия
