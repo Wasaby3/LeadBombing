@@ -15,7 +15,7 @@
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
 <body>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; clearOpen = false; citiesOpen = false"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -80,46 +80,36 @@
   <main class="main">
   <div x-show="page === 'search'">
   <header class="top">
-    <div class="status" :class="status">
-      <span class="dot"></span>
-      <span x-text="statusText"></span>
-    </div>
-    <div class="top-actions">
-      <button class="btn ghost" @click="openFolder()" x-show="exportPath" :title="exportPath">Открыть папку</button>
-      <button class="btn danger-ghost" :disabled="!canClear" @click="clearOpen = true"
-              :title="running ? 'Сначала остановите поиск' : 'Очистить найденные лиды и фильтры поиска'">Очистить</button>
-      <button class="btn" :disabled="!leads.length || fromAccount || running" @click="openSave()"
-              :title="fromAccount ? 'Сохранять можно лиды нового поиска' : ''">Сохранить лиды</button>
-      <button class="btn primary" :disabled="!leads.length || fromAccount" @click="exportOpen = true"
-              :title="fromAccount ? 'Сохранённые лиды выгружаются после нового поиска' : ''">
-        <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить всё'"></span>
-        <span class="badge" x-text="exportCount"></span>
-      </button>
-    </div>
+    <h1 class="top-title">Поиск лидов</h1>
   </header>
 
-  <section class="search">
-    <div class="spheres" role="tablist" aria-label="Сфера">
-      <template x-for="s in meta.spheres" :key="s.id">
-        <button role="tab" class="chip" :class="{ on: form.sphere === s.id }" :aria-selected="form.sphere === s.id"
+  <section class="search" aria-label="Параметры поиска">
+    <div class="spheres" role="radiogroup" aria-label="Сфера">
+      <template x-for="s in sphereChoices" :key="s.id">
+        <button type="button" role="radio" class="chip" :class="{ on: form.sphere === s.id }" :aria-checked="form.sphere === s.id"
                 :disabled="running" @click="pickSphere(s)" x-text="s.title"></button>
       </template>
     </div>
-    <form class="bar" @submit.prevent="submitSearch()">
+    <form class="bar" @submit.prevent="submitSearch()" novalidate>
       <label class="field grow">
         <span>Что ищем в 2ГИС</span>
-        <input type="search" x-model="form.query" placeholder="Например: лофт, караоке, фотостудия" :disabled="running"
-               autocomplete="off" @focus="freeSearch()">
+        <input type="search" name="query" x-model="form.query" x-ref="query" placeholder="Например: лофт, караоке, фотостудия…"
+               :disabled="running" autocomplete="off" @focus="freeSearch()"
+               :aria-invalid="formError.field === 'query'" :aria-describedby="formError.field === 'query' ? 'form-error' : null">
       </label>
       <div class="field city" @click.outside="citiesOpen = false">
-        <span>Регионы</span>
-        <button type="button" class="select" :disabled="running || !!sphere?.fixed_city"
-                @click="citiesOpen = !citiesOpen" :aria-expanded="citiesOpen" x-text="citiesLabel"></button>
+        <span id="cities-label">Города</span>
+        <button type="button" class="select" x-ref="cities" :disabled="running || !!sphere?.fixed_city"
+                @click="citiesOpen = !citiesOpen" aria-haspopup="true" :aria-expanded="citiesOpen"
+                aria-labelledby="cities-label cities-value" :aria-invalid="formError.field === 'cities'">
+          <span id="cities-value" x-text="citiesLabel"></span>
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#chevron-down"/></svg>
+        </button>
         <div class="popover" x-show="citiesOpen" x-transition.origin.top>
-          <input type="search" placeholder="Найти город" x-model="cityFilter" x-ref="cityFilter">
-          <div class="city-list">
+          <input type="search" placeholder="Найти город…" aria-label="Найти город" x-model="cityFilter" x-ref="cityFilter">
+          <div class="city-list" role="group" aria-label="Города">
             <template x-for="c in filteredCities" :key="c.code">
-              <label class="check"><input type="checkbox" :value="c.code" x-model="form.cities" :aria-label="c.name"><span x-text="c.name"></span></label>
+              <label class="check"><input type="checkbox" :value="c.code" x-model="form.cities"><span x-text="c.name"></span></label>
             </template>
           </div>
           <div class="popover-foot">
@@ -130,23 +120,24 @@
       </div>
       <label class="field limit">
         <span>Фирм на город</span>
-        <input type="number" min="1" max="2000" step="1" x-model.number="form.limit" :disabled="running">
+        <input type="number" name="limit" inputmode="numeric" min="1" max="2000" step="1" x-model.number="form.limit" :disabled="running">
       </label>
-      <button class="btn go" :class="running ? 'danger' : 'primary'" type="submit">
+      <button class="btn go" :class="{ primary: !running }" type="submit">
+        <svg class="icon" aria-hidden="true" x-show="!running"><use href="/static/app/vendor/icons.svg#play"/></svg>
+        <svg class="icon" aria-hidden="true" x-show="running"><use href="/static/app/vendor/icons.svg#square"/></svg>
         <span x-text="searchLabel"></span>
       </button>
     </form>
+    <p class="field-error" id="form-error" role="alert" x-show="formError.text" x-text="formError.text"></p>
     <div class="subbar">
       <span class="note" x-text="sphere?.note"></span>
-      <span class="note changed" x-show="formChanged && !running">
-        Форма изменена — без «Найти лиды» она вернётся к прошлому поиску.
-        <button type="button" class="link" @click="restoreForm()">Вернуть</button>
+      <span class="note" x-show="formChanged && !running" aria-live="polite">
+        Изменения не применены — нажмите «<span x-text="searchLabel"></span>» или
+        <button type="button" class="link" @click="restoreForm()">отмените их</button>
       </span>
       <label class="toggle"><input type="checkbox" x-model="form.showChrome" :disabled="running"> Показывать окно Chrome</label>
     </div>
   </section>
-
-  <div class="alert" x-show="error" x-transition x-text="error"></div>
   </div>
 
   <div x-show="page === 'leads'">
@@ -168,27 +159,63 @@
   </div>
   </div>
 
-  <section class="results" x-show="page === 'search' || onLeads">
+  <section class="results" x-show="page === 'search' || onLeads" aria-label="Результаты">
+    <div class="run-bar" x-show="!onLeads && status !== 'idle'" :class="status">
+      <span class="dot" aria-hidden="true"></span>
+      <b role="status" x-text="statusText"></b>
+      <span class="muted" x-show="statusHint" x-text="statusHint"></span>
+      <span class="log" x-show="running && log" x-text="log"></span>
+      <span class="run-label" x-show="runLabel" :class="{ stale: !running && !sameRun }"
+            :title="!running && !sameRun ? 'Найдено по другому запросу: форма поиска с тех пор изменена' : 'Параметры поиска этой таблицы'"
+            x-text="runLabel"></span>
+    </div>
+    <div class="alert" role="alert" x-show="error && !onLeads" x-transition x-text="error"></div>
+
     <div class="results-head">
       <div class="counters">
-        <span><b x-text="list.length"></b> лидов</span>
-        <template x-if="!onLeads">
-          <span class="counters">
-            <span class="muted" x-show="fromAccount">из прошлых поисков, сохранены в кабинете</span>
-            <span class="run-label" x-show="runLabel" :class="{ stale: !running && !sameRun }"
-                  :title="!running && !sameRun ? 'Найдено по другому запросу: форма поиска с тех пор изменена' : 'Параметры поиска этой таблицы'"
-                  x-text="runLabel"></span>
-            <button class="link" @click="showSkipped = !showSkipped" :disabled="!skipped.length">
-              <b x-text="skipped.length"></b> отсеяно
-            </button>
-            <span class="log" x-show="running" x-text="log"></span>
-          </span>
-        </template>
+        <span><b x-text="list.length"></b> <span x-text="leadsWord(list.length)"></span></span>
+        <span class="muted" x-show="!onLeads && fromAccount">из прошлых поисков — чтобы сохранить или выгрузить, начните новый поиск</span>
+        <button type="button" class="link toggle-skipped" x-show="!onLeads" @click="showSkipped = !showSkipped"
+                :disabled="!skipped.length" :aria-expanded="showSkipped" aria-controls="skipped-list">
+          Отсеяно: <b x-text="skipped.length"></b>
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#chevron-down"/></svg>
+        </button>
       </div>
-      <input class="filter" type="search" placeholder="Фильтр по названию или району" x-model="filter" x-show="list.length">
+      <div class="results-actions">
+        <input class="filter" type="search" placeholder="Найти по названию или району…" aria-label="Найти по названию или району"
+               autocomplete="off" x-model="filter" x-show="list.length">
+        <button type="button" class="btn" x-show="!onLeads && leads.length && !fromAccount" :disabled="running" @click="openSave()"
+                :title="running ? 'Сохранить можно после остановки поиска' : ''">
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-plus"/></svg>
+          <span>Сохранить лиды</span>
+        </button>
+        <button type="button" class="btn primary" x-show="!onLeads && leads.length && !fromAccount" @click="exportOpen = true">
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#download"/></svg>
+          <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить'"></span>
+          <span class="badge" x-text="exportCount"></span>
+        </button>
+        <div class="more" x-show="!onLeads" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
+          <button type="button" class="icon-btn" x-ref="moreBtn" aria-haspopup="menu" :aria-expanded="moreOpen"
+                  aria-label="Ещё действия" title="Ещё действия" @click="toggleMore()">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#ellipsis"/></svg>
+          </button>
+          <div class="menu" role="menu" x-ref="moreMenu" x-show="moreOpen" x-transition.origin.top.right>
+            <button type="button" role="menuitem" class="menu-item" x-show="exportPath" :title="exportPath"
+                    @click="moreOpen = false; openFolder()">
+              <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-open"/></svg>
+              <span>Открыть папку выгрузки</span>
+            </button>
+            <button type="button" role="menuitem" class="menu-item danger" :disabled="!canClear"
+                    @click="moreOpen = false; clearOpen = true">
+              <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#eraser"/></svg>
+              <span>Очистить поиск<small x-show="running">Сначала остановите поиск</small></span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="skipped" x-show="showSkipped && !onLeads" x-transition>
+    <div class="skipped" id="skipped-list" x-show="showSkipped && !onLeads" x-transition>
       <template x-for="[reason, n] in skippedByReason" :key="reason">
         <span class="pill"><span x-text="reason"></span> <b x-text="n"></b></span>
       </template>
@@ -206,14 +233,13 @@
                 <button type="button" class="sort-btn" @click="sortByPriority()" title="Сортировать по приоритету">Приоритет
                   <span class="sort-mark" x-text="prioritySortMark"></span></button></th>
               <th>Район</th><th class="num">Рейтинг</th>
-              <th>Писать сюда</th><th x-text="pricesTitle"></th></tr>
+              <th>Канал</th><th x-text="pricesTitle"></th></tr>
         </thead>
         <tbody>
           <template x-for="(l, i) in visible" :key="l.slug">
-            <tr x-init="appear($el)" @click="openCard(l.slug)" :class="{ active: selected === l.slug }" tabindex="0"
-                @keydown.enter="openCard(l.slug)">
-              <td class="pick" @click.stop><input type="checkbox" aria-label="Выбрать" :checked="picked.includes(l.slug)"
-                                                   @change="togglePick(l.slug)"></td>
+            <tr x-init="appear($el)" @click="openCard(l.slug)" :class="{ active: selected === l.slug }">
+              <td class="pick" @click.stop><label class="pick-hit"><input type="checkbox" :aria-label="`Выбрать «${l.name}»`"
+                                                   :checked="picked.includes(l.slug)" @change="togglePick(l.slug)"></label></td>
               <td class="num muted" x-text="i + 1"></td>
               <td>
                 <div class="name">
@@ -222,7 +248,7 @@
                          @error="$el.remove()">
                     <span x-show="!l.has_photo" x-text="initials(l.name)"></span>
                   </span>
-                  <span class="title" x-text="l.name"></span>
+                  <button type="button" class="title row-open" @click.stop="openCard(l.slug, $el)" x-text="l.name"></button>
                 </div>
               </td>
               <td x-show="onLeads"><span class="st" :class="statusOf(l.status).id" x-text="statusOf(l.status).title"></span></td>
@@ -247,7 +273,7 @@
       <template x-if="!running">
         <div>
           <h2>Выберите сферу и нажмите «Найти лиды»</h2>
-          <p>Лиды будут появляться здесь по ходу поиска. Клик по строке — полная карточка, «Выгрузить всё» — база в папку.</p>
+          <p>Лиды будут появляться здесь по ходу поиска. Клик по строке — полная карточка, «Выгрузить» — база в папку выгрузки.</p>
         </div>
       </template>
     </div>
@@ -725,7 +751,7 @@
 
   </div>
 
-  <div class="toast" x-show="toast" x-transition x-text="toast"></div>
+  <div class="toast" role="status" aria-live="polite" x-show="toast" x-transition x-text="toast"></div>
 </div>
 <script>
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

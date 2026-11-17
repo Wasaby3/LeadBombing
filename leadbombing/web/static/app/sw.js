@@ -1,6 +1,6 @@
 /* App shell cache: network first, cache as offline fallback. API calls are never cached. */
-const CACHE = 'lb-shell-v4';
-const SHELL = ['/search', '/static/app/app.css', '/static/app/app.js', '/static/app/icon.svg',
+const CACHE = 'lb-shell-v5';
+const SHELL = ['/search', '/static/app/app.css', '/static/app/app.js', '/static/app/icon.svg', '/static/app/vendor/icons.svg',
   '/static/app/vendor/alpine-3.14.1.min.js', '/static/app/vendor/motion-11.11.13.js', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

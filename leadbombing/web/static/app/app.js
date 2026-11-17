@@ -20,6 +20,19 @@ const SECTIONS = ['contacts', 'prices', 'legal', 'work'];
 const SUB_SECTIONS = ['channels', 'demo', 'message', 'hook', 'comment'];
 const CUSTOM = { id: 'custom', title: 'Свободный поиск', query: '', fixed_city: null,
   note: 'Свободный поиск: все фирмы из выдачи 2ГИС по вашему запросу, выгрузка как у шаблонов' };
+const STATUS_TEXT = { idle: 'Не запущен', running: 'Идёт поиск', done: 'Поиск завершён', stopped: 'Поиск остановлен',
+  error: 'Поиск прерван' };
+const NO_FORM_ERROR = { field: '', text: '' };
+
+/* Russian plural: plural(5, ['лид', 'лида', 'лидов']) → 'лидов'. */
+function plural(n, [one, few, many]) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+const LEAD_WORDS = ['лид', 'лида', 'лидов'];
 
 function loadForm(saved = store.get(FORM_KEY, {})) {
   const form = { sphere: 'bani', query: '', cities: ['moscow'], limit: 100, showChrome: false, ...saved };
@@ -80,7 +93,7 @@ document.addEventListener('alpine:init', () => {
     meta: { spheres: [], cities: [] },
     form: loadForm(),
     searchForm: loadForm(),  // what the table was searched with; `form` returns to it unless «Найти лиды» is pressed
-    citiesOpen: false, cityFilter: '', picked: [],
+    citiesOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
     status: 'idle', error: '', log: '', cursor: 0,
     params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
     leads: [], skipped: [], filter: '', showSkipped: false,
@@ -97,6 +110,10 @@ document.addEventListener('alpine:init', () => {
 
     async init() {
       this.$watch('citiesOpen', (open) => open && this.$nextTick(() => this.$refs.cityFilter.focus()));
+      // A field error goes away as soon as the field it is about changes.
+      this.$watch('form.query', () => this.formError.field === 'query' && this.clearFormError());
+      this.$watch('form.cities', () => this.formError.field === 'cities' && this.clearFormError());
+      this.$watch('form.sphere', () => this.clearFormError());
       this.$watch('exportPath', () => this.saveSettings());
       // Leaving the app must not lose a settings change still waiting for the debounced save.
       window.addEventListener('pagehide', () => this.flushSettings());
@@ -313,9 +330,10 @@ document.addEventListener('alpine:init', () => {
     get running() { return this.status === 'running'; },
     get isBani() { return (this.onLeads ? this.folder?.sphere : this.form.sphere) === 'bani'; },
     get pricesTitle() { return this.isBani ? 'Залы' : 'Услуги'; },
-    get statusText() {
-      return { idle: 'Готов', running: 'Идёт поиск', done: 'Готово', stopped: 'Остановлено', error: 'Ошибка' }[this.status];
-    },
+    get statusText() { return STATUS_TEXT[this.status]; },
+    get statusHint() { return this.canResume ? 'можно продолжить с того же места' : ''; },
+    leadsWord(n) { return plural(n, LEAD_WORDS); },
+    get sphereChoices() { return [...this.meta.spheres, CUSTOM]; },
     get visible() {
       const q = this.filter.trim().toLowerCase();
       const found = q ? this.list.filter((l) => `${l.name} ${l.district}`.toLowerCase().includes(q)) : this.list;
@@ -345,15 +363,34 @@ document.addEventListener('alpine:init', () => {
       this.picked = on ? [...rest, ...visible] : rest;
     },
 
+    /* A wrong form field: the message goes under the form, the field is marked and focused. */
+    showFormError(field, text) {
+      this.formError = { field, text };
+      this.$nextTick(() => this.$refs[field]?.focus());
+    },
+    clearFormError() { this.formError = NO_FORM_ERROR; },
+
+    /* «Ещё» menu over the results: focus goes into the menu and back to its button. */
+    toggleMore() {
+      this.moreOpen = !this.moreOpen;
+      if (this.moreOpen) this.$nextTick(() => this.$refs.moreMenu.querySelector('[role=menuitem]:not([disabled])')?.focus());
+    },
+    closeMore() {
+      if (!this.moreOpen) return;
+      this.moreOpen = false;
+      this.$refs.moreBtn.focus();
+    },
+
     async start() {
       this.error = '';
+      this.clearFormError();
       this.citiesOpen = false;
       if (this.form.sphere === CUSTOM.id && !this.form.query.trim()) {
-        this.error = 'Введите, что искать, или выберите сферу из списка';
+        this.showFormError('query', 'Введите, что искать в 2ГИС, или выберите сферу');
         return;
       }
       if (!this.searchCities.length) {
-        this.error = 'Выберите хотя бы один регион';
+        this.showFormError('cities', 'Выберите хотя бы один город');
         return;
       }
       try {
@@ -477,7 +514,7 @@ document.addEventListener('alpine:init', () => {
       this.log = (s.log || '').replace(/^\d\d:\d\d:\d\d\s*/, '');
       if (s.error) this.error = s.error;
       if (this.running || this.busy) this.schedulePoll();
-      else if (s.status === 'done' && s.events.length) this.notify(`Поиск завершён: ${this.leads.length} лидов`);
+      else if (s.status === 'done' && s.events.length) this.notify(`Поиск завершён: ${this.leads.length} ${this.leadsWord(this.leads.length)}`);
     },
 
     appear(el) {
