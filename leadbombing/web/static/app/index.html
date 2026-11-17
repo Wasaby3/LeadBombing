@@ -81,6 +81,9 @@
         <span class="avatar" aria-hidden="true" x-text="initial"></span>
         <span class="user" x-text="user"></span>
       </a>
+      <button type="button" class="icon-btn logout-btn" @click="signOut()" aria-label="Выйти" title="Выйти">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#log-out"/></svg>
+      </button>
     </div>
   </nav>
 

@@ -438,7 +438,7 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .side { position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-right: 0; border-top: 1px solid var(--line); z-index: 15; }
   .side { flex-direction: row; align-items: center; gap: 8px; }
-  .side .brand, .side-user .user { display: none; }
+  .side .brand, .side-user .user, .side-user .logout-btn { display: none; }
   /* Phones: the bottom bar is full, the theme button sits at the top right of the page title row */
   .theme-btn { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 12px; z-index: 16;
     width: 40px; height: 40px; background: var(--surface); border: 1px solid var(--line); }
