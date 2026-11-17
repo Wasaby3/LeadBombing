@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "sphere": "custom",
+  "timezone": "Europe/Moscow",
+  "locale": "ru-RU",
+  "currency": "RUB",
+  "legal": {
+    "operator_name": "ЗАГЛУШКА: оператор ПДн",
+    "privacy_policy_url": "https://example.com/privacy"
+  },
+  "policy": {
+    "deposit_percent": 0,
+    "free_cancellation_hours": 24,
+    "reschedule_pricing": "current"
+  },
+  "working_hours": {
+    "days": {
+      "mon": {
+        "start_from": "10:00",
+        "start_to": "23:00"
+      },
+      "tue": null,
+      "wed": null,
+      "thu": null,
+      "fri": null,
+      "sat": {
+        "start_from": "09:00",
+        "start_to": "24:00"
+      },
+      "sun": null
+    },
+    "max_end_after_close_min": 0
+  },
+  "exceptions": [],
+  "slug": "hlebnikovskie-bani",
+  "name": "Хлебниковские бани",
+  "theme": {
+    "accent": "#5b5bd6",
+    "wordmark": {
+      "main": "Хлебниковские бани",
+      "sub": "свободный поиск · пн 10:00–23:00, вт вых"
+    }
+  },
+  "pwa": {
+    "short_name": "Хлебниковски",
+    "description": "Онлайн-запись: Хлебниковские бани"
+  },
+  "texts": {
+    "tagline": "пн 10:00–23:00, вт выходной, ср выходной, чт выходной, пт выходной, сб 09:00–02:00, вс выходной",
+    "description": "",
+    "booking_note": ""
+  },
+  "contacts": {
+    "phone": "+7 495 777-88-99",
+    "address": "Москва, Лесная, 5",
+    "website": "http://hleb-bani.ru"
+  },
+  "services": [
+    {
+      "key": "usluga",
+      "name": "Услуга",
+      "description": "",
+      "section": "",
+      "price_rub": null,
+      "price_from": false
+    }
+  ]
+}

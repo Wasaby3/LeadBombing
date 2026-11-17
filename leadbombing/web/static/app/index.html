@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LeadBombing</title>
+<meta name="description" content="Поиск лидов в 2ГИС по сфере и выгрузка базы в папку">
+<meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f11" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/app/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app/app.css">
+<script src="/static/app/vendor/motion-11.11.13.js"></script>
+<script src="/static/app/app.js"></script>
+<script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
+</head>
+<body>
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="closeCard(); exportOpen = false; saveOpen = false; citiesOpen = false"
+     @lb-logout.window="onLoggedOut()">
+
+  <main class="login" x-show="authChecked && !user">
+    <form class="login-card" @submit.prevent="signIn()">
+      <div class="brand">
+        <img src="/static/app/icon.svg" alt="" width="26" height="26">
+        <span>LeadBombing</span>
+      </div>
+      <h1>Вход в кабинет</h1>
+      <label class="field">
+        <span>Логин</span>
+        <input type="text" x-model="auth.login" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+      </label>
+      <label class="field">
+        <span>Пароль</span>
+        <input type="password" x-model="auth.password" autocomplete="current-password" required>
+      </label>
+      <div class="alert" x-show="auth.error" x-text="auth.error"></div>
+      <button class="btn primary" type="submit" :disabled="auth.busy" x-text="auth.busy ? 'Входим…' : 'Войти'"></button>
+    </form>
+  </main>
+
+  <div class="workspace" x-show="user">
+  <nav class="side" aria-label="Меню">
+    <div class="brand">
+      <img src="/static/app/icon.svg" alt="" width="26" height="26">
+      <span>LeadBombing</span>
+    </div>
+    <div class="nav">
+      <a href="/search" class="nav-item" :class="{ on: page === 'search' }" :aria-current="page === 'search' && 'page'"
+         @click.prevent="go('search')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span>Поиск лидов</span>
+      </a>
+      <a href="/saved" class="nav-item" :class="{ on: page === 'saved' }" :aria-current="page === 'saved' && 'page'"
+         @click.prevent="go('saved')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Сохранённые</span>
+      </a>
+      <a href="/settings" class="nav-item" :class="{ on: page === 'settings' }" :aria-current="page === 'settings' && 'page'"
+         @click.prevent="go('settings')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        <span>Настройки</span>
+      </a>
+    </div>
+    <div class="side-user">
+      <a href="/profile" class="me" :class="{ on: page === 'profile' }" title="Профиль" @click.prevent="go('profile')">
+        <span class="avatar" x-text="initial"></span>
+        <span class="user" x-text="user"></span>
+      </a>
+      <button class="icon-btn" @click="signOut()" title="Выйти" aria-label="Выйти">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <main class="main">
+  <div x-show="page === 'search'">
+  <header class="top">
+    <div class="status" :class="status">
+      <span class="dot"></span>
+      <span x-text="statusText"></span>
+    </div>
+    <div class="top-actions">
+      <button class="btn ghost" @click="openFolder()" x-show="exportPath" :title="exportPath">Открыть папку</button>
+      <button class="btn" :disabled="!leads.length || fromAccount || running" @click="openSave()"
+              :title="fromAccount ? 'Сохранять можно лиды нового поиска' : ''">Сохранить лиды</button>
+      <button class="btn primary" :disabled="!leads.length || fromAccount" @click="exportOpen = true"
+              :title="fromAccount ? 'Сохранённые лиды выгружаются после нового поиска' : ''">
+        <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить всё'"></span>
+        <span class="badge" x-text="exportCount"></span>
+      </button>
+    </div>
+  </header>
+
+  <section class="search">
+    <div class="spheres" role="tablist" aria-label="Сфера">
+      <template x-for="s in meta.spheres" :key="s.id">
+        <button role="tab" class="chip" :class="{ on: form.sphere === s.id }" :aria-selected="form.sphere === s.id"
+                :disabled="running" @click="pickSphere(s)" x-text="s.title"></button>
+      </template>
+    </div>
+    <form class="bar" @submit.prevent="running ? stop() : start()">
+      <label class="field grow">
+        <span>Что ищем в 2ГИС</span>
+        <input type="search" x-model="form.query" placeholder="Например: лофт, караоке, фотостудия" :disabled="running"
+               autocomplete="off" @focus="freeSearch()">
+      </label>
+      <div class="field city" @click.outside="citiesOpen = false">
+        <span>Регионы</span>
+        <button type="button" class="select" :disabled="running || !!sphere?.fixed_city"
+                @click="citiesOpen = !citiesOpen" :aria-expanded="citiesOpen" x-text="citiesLabel"></button>
+        <div class="popover" x-show="citiesOpen" x-transition.origin.top>
+          <input type="search" placeholder="Найти город" x-model="cityFilter" x-ref="cityFilter">
+          <div class="city-list">
+            <template x-for="c in filteredCities" :key="c.code">
+              <label class="check"><input type="checkbox" :value="c.code" x-model="form.cities" :aria-label="c.name"><span x-text="c.name"></span></label>
+            </template>
+          </div>
+          <div class="popover-foot">
+            <span x-text="'Выбрано: ' + form.cities.length"></span>
+            <button type="button" class="link" @click="form.cities = ['moscow']">Только Москва</button>
+          </div>
+        </div>
+      </div>
+      <label class="field limit">
+        <span>Фирм на город</span>
+        <input type="number" min="1" max="2000" step="1" x-model.number="form.limit" :disabled="running">
+      </label>
+      <button class="btn go" :class="running ? 'danger' : 'primary'" type="submit">
+        <span x-text="running ? 'Остановить' : 'Найти лиды'"></span>
+      </button>
+    </form>
+    <div class="subbar">
+      <span class="note" x-text="sphere?.note"></span>
+      <label class="toggle"><input type="checkbox" x-model="form.showChrome" :disabled="running"> Показывать окно Chrome</label>
+    </div>
+  </section>
+
+  <div class="alert" x-show="error" x-transition x-text="error"></div>
+  </div>
+
+  <div x-show="page === 'saved'">
+  <header class="top">
+    <h1 class="top-title">Сохранённые лиды</h1>
+    <div class="top-actions">
+      <button class="btn ghost" @click="openFolder()" x-show="exportPath" :title="exportPath">Открыть папку</button>
+      <button class="btn primary" :disabled="!folderLeads.length" @click="exportOpen = true">
+        <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить папку'"></span>
+        <span class="badge" x-text="exportCount"></span>
+      </button>
+    </div>
+  </header>
+  <div class="spheres" role="tablist" aria-label="Папки" x-show="folders.length">
+    <template x-for="f in folders" :key="f.id">
+      <button role="tab" class="chip" :class="{ on: folderId === f.id }" :aria-selected="folderId === f.id"
+              @click="showFolder(f.id)"><span x-text="f.name"></span> <span class="muted" x-text="f.count"></span></button>
+    </template>
+  </div>
+  </div>
+
+  <section class="results" x-show="page === 'search' || onSaved">
+    <div class="results-head">
+      <div class="counters">
+        <span><b x-text="list.length"></b> лидов</span>
+        <template x-if="!onSaved">
+          <span class="counters">
+            <span class="muted" x-show="fromAccount">сохранены в кабинете</span>
+            <button class="link" @click="showSkipped = !showSkipped" :disabled="!skipped.length">
+              <b x-text="skipped.length"></b> отсеяно
+            </button>
+            <span class="log" x-show="running" x-text="log"></span>
+          </span>
+        </template>
+      </div>
+      <input class="filter" type="search" placeholder="Фильтр по названию или району" x-model="filter" x-show="list.length">
+    </div>
+
+    <div class="skipped" x-show="showSkipped && !onSaved" x-transition>
+      <template x-for="[reason, n] in skippedByReason" :key="reason">
+        <span class="pill"><span x-text="reason"></span> <b x-text="n"></b></span>
+      </template>
+    </div>
+
+    <div class="table-wrap" x-show="list.length">
+      <table>
+        <thead>
+          <tr><th class="pick"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
+                                    :indeterminate="picked.length > 0 && !allVisiblePicked"
+                                    @change="toggleAll($event.target.checked)"></th>
+              <th class="num">#</th><th>Название</th><th>Район</th><th class="num">Рейтинг</th>
+              <th>Писать сюда</th><th x-text="pricesTitle"></th></tr>
+        </thead>
+        <tbody>
+          <template x-for="(l, i) in visible" :key="l.slug">
+            <tr x-init="appear($el)" @click="openCard(l.slug)" :class="{ active: selected === l.slug }" tabindex="0"
+                @keydown.enter="openCard(l.slug)">
+              <td class="pick" @click.stop><input type="checkbox" aria-label="Выбрать" :checked="picked.includes(l.slug)"
+                                                   @change="togglePick(l.slug)"></td>
+              <td class="num muted" x-text="i + 1"></td>
+              <td>
+                <div class="name">
+                  <span class="thumb" :class="{ empty: !l.has_photo }">
+                    <img x-show="l.has_photo" :src="`${itemUrl(l.slug)}/hero`" loading="lazy" alt=""
+                         @error="$el.remove()">
+                    <span x-show="!l.has_photo" x-text="initials(l.name)"></span>
+                  </span>
+                  <span class="title" x-text="l.name"></span>
+                </div>
+              </td>
+              <td class="muted" x-text="l.district || '—'"></td>
+              <td class="num"><span x-show="l.rating" class="rating" x-text="l.rating"></span><span x-show="!l.rating" class="muted">—</span></td>
+              <td><span class="channel" :class="channelKind(l.channel)" x-text="channelLabel(l.channel)"></span></td>
+              <td class="prices muted" x-text="pricesShort(l.prices)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="empty" x-show="onSaved && !list.length">
+      <h2 x-text="folders.length ? 'В папке пусто' : 'Сохранённых лидов пока нет'"></h2>
+      <p>Найдите лиды на странице поиска и нажмите «Сохранить лиды» — папка появится здесь.</p>
+    </div>
+
+    <div class="empty" x-show="!onSaved && !list.length">
+      <template x-if="running"><p>Ищем в 2ГИС… Первые лиды появятся через минуту: Chrome проходит выдачу и открывает каждую фирму.</p></template>
+      <template x-if="!running">
+        <div>
+          <h2>Выберите сферу и нажмите «Найти лиды»</h2>
+          <p>Лиды будут появляться здесь по ходу поиска. Клик по строке — полная карточка, «Выгрузить всё» — база в папку.</p>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <section class="page" x-show="page === 'profile'">
+    <h1>Профиль</h1>
+    <div class="panel profile-head">
+      <span class="avatar lg" x-text="initial"></span>
+      <div class="grow">
+        <b x-text="user"></b>
+        <div class="muted small">Учётная запись LeadBombing</div>
+      </div>
+      <button class="btn" @click="signOut()">Выйти</button>
+    </div>
+  </section>
+
+  <section class="page" x-show="page === 'settings'">
+    <h1>Настройки</h1>
+    <div class="panel">
+      <h2>Оформление</h2>
+      <div class="row">
+        <span>Тема</span>
+        <div class="segmented" role="radiogroup" aria-label="Тема">
+          <button role="radio" :aria-checked="currentTheme === 'light'" :class="{ on: currentTheme === 'light' }"
+                  @click="setTheme('light')">Светлая</button>
+          <button role="radio" :aria-checked="currentTheme === 'dark'" :class="{ on: currentTheme === 'dark' }"
+                  @click="setTheme('dark')">Тёмная</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Профиль <span class="soon">скоро</span></h2>
+      <div class="form-grid">
+        <label class="field"><span>Имя</span><input type="text" placeholder="Появится позже" disabled></label>
+        <label class="field"><span>Логин</span><input type="text" :value="user" disabled></label>
+      </div>
+      <button class="btn" disabled>Сбросить пароль</button>
+    </div>
+    <div class="panel">
+      <h2>Выгрузка</h2>
+      <label class="field"><span>Папка для выгрузки</span></label>
+      <div class="path-row">
+        <input type="text" x-model="exportPath" placeholder="/Users/…/leads/bani" spellcheck="false" aria-label="Папка для выгрузки">
+        <button class="btn" @click="pickFolder()">Выбрать…</button>
+      </div>
+    </div>
+  </section>
+  </main>
+
+  <!-- Lead card -->
+  <div class="scrim" x-show="selected" x-transition.opacity @click="closeCard()"></div>
+  <aside class="card" x-show="selected" x-transition:enter="slide-in" x-transition:leave="slide-out"
+         role="dialog" aria-modal="true" aria-label="Карточка лида">
+    <template x-if="card">
+      <div class="card-body">
+        <div class="hero" :style="heroStyle">
+          <button class="close" @click="closeCard()" aria-label="Закрыть">✕</button>
+          <div class="hero-text">
+            <h2 x-text="cardName"></h2>
+            <p x-text="[card.lead.district, card.lead.rating && ('★ ' + card.lead.rating + ' · ' + (card.lead.reviews || 0) + ' отзывов')].filter(Boolean).join(' · ')"></p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <a class="btn primary" :href="writeHref" target="_blank" rel="noopener" x-text="'Написать: ' + card.row['Канал']"></a>
+          <button class="btn" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">Копировать сообщение</button>
+          <a class="btn ghost" :href="card.lead.source" target="_blank" rel="noopener">2ГИС ↗</a>
+        </div>
+
+        <div class="block">
+          <h3>Крючок</h3>
+          <p x-text="card.row['Крючок']"></p>
+        </div>
+
+        <div class="block">
+          <h3>Сообщение <button class="link" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">копировать</button></h3>
+          <p class="message" x-text="card.row['Сообщение']"></p>
+        </div>
+
+        <div class="block">
+          <h3>Контакты</h3>
+          <dl class="kv">
+            <template x-for="[k, v] in contactRows" :key="k + v">
+              <div><dt x-text="k"></dt><dd><a :href="contactHref(k, v)" target="_blank" rel="noopener" x-text="v"></a></dd></div>
+            </template>
+            <div><dt>Адрес</dt><dd x-text="card.row['Адрес']"></dd></div>
+            <div><dt>Часы</dt><dd x-text="card.lead.hours"></dd></div>
+            <div x-show="card.row['Юрлицо']"><dt>Юрлицо</dt><dd x-text="card.row['Юрлицо']"></dd></div>
+          </dl>
+        </div>
+
+        <div class="block">
+          <h3>Услуги</h3>
+          <ul class="prices-list">
+            <template x-for="p in cardPrices" :key="p.name">
+              <li><span x-text="p.name"></span><b x-text="p.price"></b></li>
+            </template>
+          </ul>
+          <p class="muted" x-show="!cardPrices.length">Во вкладке цен 2ГИС пусто — в выгрузке будет заглушка.</p>
+          <p class="muted small" x-show="card.lead.prices_updated" x-text="'Цены обновлены в 2ГИС: ' + card.lead.prices_updated"></p>
+        </div>
+
+        <details class="block">
+          <summary>Что взято по умолчанию (<span x-text="card.lead.assumed.length"></span>)</summary>
+          <ul class="assumed"><template x-for="a in card.lead.assumed"><li x-text="a"></li></template></ul>
+        </details>
+
+        <p class="muted small">Папка в выгрузке: <code x-text="card.lead.folder"></code></p>
+      </div>
+    </template>
+    <div class="card-loading" x-show="!card">Загружаем карточку…</div>
+  </aside>
+
+  <!-- Export -->
+  <div class="scrim" x-show="exportOpen" x-transition.opacity @click="exportOpen = false"></div>
+  <div class="modal" x-show="exportOpen" x-transition role="dialog" aria-modal="true" aria-label="Выгрузка">
+    <h2 x-text="(picked.length ? 'Выгрузить выбранные: ' : 'Выгрузить все: ') + exportCount"></h2>
+    <p class="muted">В папку запишутся <code>leads.json</code>, <code>outreach.csv</code> и <code>tenants/&lt;slug&gt;/</code>
+      с <code>business.json</code> и <code>images/hero.jpg</code>. Если база там уже есть — новые добавятся, найденные обновятся,
+      «Статус» и «Руководитель» сохранятся.</p>
+    <div class="path-row">
+      <input type="text" x-model="exportPath" placeholder="/Users/…/leads/bani" spellcheck="false">
+      <button class="btn" @click="pickFolder()">Выбрать…</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" @click="exportOpen = false">Отмена</button>
+      <button class="btn primary" :disabled="!exportPath || exporting" @click="exportAll()"
+              x-text="exporting ? 'Выгружаем…' : 'Выгрузить'"></button>
+    </div>
+  </div>
+
+  <!-- Save leads into a folder -->
+  <div class="scrim" x-show="saveOpen" x-transition.opacity @click="saveOpen = false"></div>
+  <form class="modal" x-show="saveOpen" x-transition role="dialog" aria-modal="true" aria-label="Сохранить лиды"
+        @submit.prevent="saveLeads()">
+    <h2 x-text="(picked.length ? 'Сохранить выбранные: ' : 'Сохранить все: ') + exportCount"></h2>
+    <p class="muted">Лиды с карточками и фото останутся в разделе «Сохранённые» — к ним можно вернуться и выгрузить позже.</p>
+    <div class="segmented" role="radiogroup" aria-label="Куда сохранить">
+      <button type="button" role="radio" :aria-checked="saveForm.mode === 'new'" :class="{ on: saveForm.mode === 'new' }"
+              @click="saveForm.mode = 'new'">Новая папка</button>
+      <button type="button" role="radio" :aria-checked="saveForm.mode === 'add'" :class="{ on: saveForm.mode === 'add' }"
+              :disabled="!sameSphereFolders.length" @click="saveForm.mode = 'add'">В существующую</button>
+    </div>
+    <label class="field save-target" x-show="saveForm.mode === 'new'">
+      <span>Имя папки</span>
+      <input type="text" x-model="saveForm.name" maxlength="200" spellcheck="false">
+    </label>
+    <label class="field save-target" x-show="saveForm.mode === 'add'">
+      <span>Папка</span>
+      <select x-model.number="saveForm.folderId">
+        <template x-for="f in sameSphereFolders" :key="f.id">
+          <option :value="f.id" x-text="`${f.name} (${f.count})`"></option>
+        </template>
+      </select>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" @click="saveOpen = false">Отмена</button>
+      <button type="submit" class="btn primary"
+              :disabled="saving || (saveForm.mode === 'new' ? !saveForm.name.trim() : !saveForm.folderId)"
+              x-text="saving ? 'Сохраняем…' : 'Сохранить'"></button>
+    </div>
+  </form>
+
+  </div>
+
+  <div class="toast" x-show="toast" x-transition x-text="toast"></div>
+</div>
+<script>
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+</script>
+</body>
+</html>

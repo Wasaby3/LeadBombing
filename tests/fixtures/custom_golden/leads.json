@@ -1,0 +1,120 @@
+[
+  {
+    "slug": "usadba-bannaya",
+    "folder": "tenants/usadba-bannaya",
+    "demo_path": "/s/usadba-bannaya/",
+    "name": "Усадьба Банная, комплекс элитного отдыха",
+    "sphere": "custom",
+    "city": "Москва",
+    "source": "https://2gis.ru/moscow/firm/70000001007499623",
+    "contact": {
+      "write_first": "whatsapp",
+      "whatsapp": "https://wa.me/79587752088",
+      "telegram": "https://t.me/+79035490939",
+      "phones": [
+        "+7 958 775-20-88",
+        "+7 499 111-25-70"
+      ],
+      "email": "info@usadba.ru"
+    },
+    "rating": 4.7,
+    "reviews": 32,
+    "district": "Печатники",
+    "hours": "круглосуточно",
+    "pitch": "Своего сайта нет, запись только звонком или в мессенджере; цены в 2ГИС не обновлялись с января 2025.",
+    "services_from_2gis": [
+      {
+        "name": "Турецкая баня за 2 часа",
+        "price": "30 000 ₽"
+      },
+      {
+        "name": "VIP зал Фонда",
+        "price": "от 32 000 ₽"
+      },
+      {
+        "name": "Парение веником",
+        "price": "3 000 ₽"
+      },
+      {
+        "name": "Веник дубовый",
+        "price": "500 ₽"
+      }
+    ],
+    "prices_updated": "2025-01-21",
+    "photos": {
+      "hero_url": "https://i5.photo.2gis.com/x/common",
+      "album": "https://2gis.ru/moscow/firm/70000001007499623/tab/photos",
+      "album_count": 97
+    },
+    "assumed": [
+      "в 2ГИС больше одной страницы цен — взята первая"
+    ],
+    "status": "новый"
+  },
+  {
+    "slug": "hlebnikovskie-bani",
+    "folder": "tenants/hlebnikovskie-bani",
+    "demo_path": "/s/hlebnikovskie-bani/",
+    "name": "Хлебниковские бани",
+    "sphere": "custom",
+    "city": "Москва",
+    "source": "https://2gis.ru/moscow/firm/70000001000000002",
+    "contact": {
+      "write_first": "vk",
+      "phones": [
+        "+7 495 777-88-99"
+      ],
+      "website": "http://hleb-bani.ru"
+    },
+    "rating": null,
+    "reviews": null,
+    "district": "",
+    "hours": "пн 10:00–23:00, вт выходной, ср выходной, чт выходной, пт выходной, сб 09:00–02:00, вс выходной",
+    "pitch": "Записаться онлайн с выбором времени негде — только звонок.",
+    "services_from_2gis": [],
+    "prices_updated": null,
+    "photos": {
+      "hero_url": null,
+      "album": "https://2gis.ru/moscow/firm/70000001000000002/tab/photos",
+      "album_count": null
+    },
+    "assumed": [
+      "услуг во вкладке цен нет — одна услуга «Услуга» без цены",
+      "обложки нет — hero.jpg не скачан"
+    ],
+    "status": "новый"
+  },
+  {
+    "slug": "fitnes-klub-sila",
+    "folder": "tenants/fitnes-klub-sila",
+    "demo_path": "/s/fitnes-klub-sila/",
+    "name": "Фитнес-клуб Сила",
+    "sphere": "custom",
+    "city": "Москва",
+    "source": "https://2gis.ru/moscow/firm/70000001000000003",
+    "contact": {
+      "write_first": "phone",
+      "phones": [
+        "+7 999 000-11-22"
+      ]
+    },
+    "rating": null,
+    "reviews": null,
+    "district": "",
+    "hours": "круглосуточно",
+    "pitch": "Своего сайта нет, запись только звонком или в мессенджере.",
+    "services_from_2gis": [],
+    "prices_updated": null,
+    "photos": {
+      "hero_url": null,
+      "album": "https://2gis.ru/moscow/firm/70000001000000003/tab/photos",
+      "album_count": null
+    },
+    "assumed": [
+      "услуг во вкладке цен нет — одна услуга «Услуга» без цены",
+      "часы работы в 2ГИС не указаны — взято круглосуточно",
+      "обложки нет — hero.jpg не скачан"
+    ],
+    "status": "новый"
+  }
+]

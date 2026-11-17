@@ -1,0 +1,223 @@
+"""Thin client of the local Supabase: password login (Auth) and the account tables (PostgREST, RLS by user JWT)."""
+from __future__ import annotations
+
+import os
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import requests
+
+from ..logger import logger
+
+DEFAULT_URL = 'http://127.0.0.1:55321'
+LOGIN_DOMAIN = 'leadbombing.local'  # Supabase logs in by email: login `admin` is admin@leadbombing.local
+_TIMEOUT_S = 10
+_ENV_FILE = '.env.local'
+_RUN_FIELDS = 'id,sphere,query,cities,lead_limit,status,accepted,skipped,error,started_at,finished_at'
+_FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at'
+_FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
+
+
+class StoreError(RuntimeError):
+    """Database problem; the message is shown to the user."""
+
+
+class InvalidCredentials(StoreError):
+    pass
+
+
+class SessionExpired(StoreError):
+    pass
+
+
+@dataclass(frozen=True)
+class Session:
+    user_id: str
+    login: str
+    access_token: str
+    refresh_token: str
+    expires_at: float  # unix time
+
+
+def login_email(login: str) -> str:
+    return login if '@' in login else f'{login}@{LOGIN_DOMAIN}'
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class _HttpError(StoreError):
+    def __init__(self, status: int, code: str) -> None:
+        super().__init__(f'HTTP {status} {code}')
+        self.status, self.code = status, code
+
+
+class SupabaseStore:
+    def __init__(self, url: str, key: str) -> None:
+        self._url = url.rstrip('/')
+        self._key = key
+
+    # --- Auth ---
+
+    def sign_in(self, login: str, password: str) -> Session:
+        data = self._auth('token?grant_type=password', {'email': login_email(login), 'password': password})
+        return self._session(data)
+
+    def refresh(self, refresh_token: str) -> Session:
+        return self._session(self._auth('token?grant_type=refresh_token', {'refresh_token': refresh_token}))
+
+    def sign_out(self, access_token: str) -> None:
+        try:
+            self._request('POST', '/auth/v1/logout', access_token)
+        except StoreError as e:  # the token expires on its own anyway
+            logger.debug('Выход из Supabase: %s', e)
+
+    # --- Account data ---
+
+    def get_settings(self, token: str) -> dict:
+        rows = self._request('GET', '/rest/v1/user_settings', token, params={'select': 'data'})
+        return rows[0]['data'] if rows else {}
+
+    def save_settings(self, token: str, data: dict) -> None:
+        self._request('POST', '/rest/v1/user_settings', token, json={'data': data, 'updated_at': _now()},
+                      prefer='resolution=merge-duplicates,return=minimal')
+
+    def create_run(self, token: str, run: dict) -> int:
+        rows = self._request('POST', '/rest/v1/runs', token, json=run, params={'select': 'id'},
+                             prefer='return=representation')
+        return int(rows[0]['id'])
+
+    def update_run(self, token: str, run_id: int, fields: dict) -> None:
+        self._request('PATCH', '/rest/v1/runs', token, json=fields, params={'id': f'eq.{run_id}'},
+                      prefer='return=minimal')
+
+    def save_lead(self, token: str, lead: dict) -> None:
+        self._request('POST', '/rest/v1/leads', token, json={**lead, 'updated_at': _now()},
+                      params={'on_conflict': 'user_id,sphere,firm_id'},
+                      prefer='resolution=merge-duplicates,return=minimal')
+
+    def list_runs(self, token: str, limit: int) -> list[dict]:
+        return self._request('GET', '/rest/v1/runs', token,
+                             params={'select': _RUN_FIELDS, 'order': 'started_at.desc', 'limit': str(limit)})
+
+    def list_leads(self, token: str, limit: int) -> list[dict]:
+        return self._request('GET', '/rest/v1/leads', token,
+                             params={'select': 'slug,sphere,summary', 'order': 'updated_at.desc', 'limit': str(limit)})
+
+    def find_lead(self, token: str, slug: str) -> Optional[dict]:
+        rows = self._request('GET', '/rest/v1/leads', token, params={
+            'select': 'card', 'slug': f'eq.{slug}', 'order': 'updated_at.desc', 'limit': '1'})
+        return rows[0]['card'] if rows else None
+
+    # --- Folders of saved leads ---
+
+    def create_folder(self, token: str, folder: dict) -> int:
+        rows = self._request('POST', '/rest/v1/folders', token, json=folder, params={'select': 'id'},
+                             prefer='return=representation')
+        return int(rows[0]['id'])
+
+    def get_folder(self, token: str, folder_id: int) -> Optional[dict]:
+        rows = self._request('GET', '/rest/v1/folders', token,
+                             params={'select': _FOLDER_FIELDS, 'id': f'eq.{folder_id}'})
+        return rows[0] if rows else None
+
+    def update_folder(self, token: str, folder_id: int, fields: dict) -> None:
+        self._request('PATCH', '/rest/v1/folders', token, json=fields, params={'id': f'eq.{folder_id}'},
+                      prefer='return=minimal')
+
+    def list_folders(self, token: str) -> list[dict]:
+        rows = self._request('GET', '/rest/v1/folders', token, params={
+            'select': f'{_FOLDER_FIELDS},folder_leads(count)', 'order': 'created_at.desc'})
+        return [{**{k: v for k, v in r.items() if k != 'folder_leads'},
+                 'count': r['folder_leads'][0]['count'] if r['folder_leads'] else 0} for r in rows]
+
+    def add_to_folder(self, token: str, folder_id: int, leads: list[dict]) -> None:
+        """Insert leads ({slug, summary, card, raw}) in order; a lead already in the folder is replaced."""
+        base = datetime.now(timezone.utc)
+        rows = [{**lead, 'folder_id': folder_id, 'added_at': (base + timedelta(microseconds=i)).isoformat()}
+                for i, lead in enumerate(leads)]
+        for start in range(0, len(rows), _FOLDER_CHUNK):
+            self._request('POST', '/rest/v1/folder_leads', token, json=rows[start:start + _FOLDER_CHUNK],
+                          params={'on_conflict': 'folder_id,slug'},
+                          prefer='resolution=merge-duplicates,return=minimal')
+
+    def folder_leads(self, token: str, folder_id: int) -> list[dict]:
+        rows = self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'summary', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+        return [r['summary'] for r in rows]
+
+    def folder_card(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
+        rows = self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'card', 'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}'})
+        return rows[0]['card'] if rows else None
+
+    def folder_raw(self, token: str, folder_id: int) -> list[dict]:
+        """[{slug, raw: {item, prices}}] in folder order, for export."""
+        return self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'slug,raw', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+
+    # --- HTTP ---
+
+    @staticmethod
+    def _session(data: dict) -> Session:
+        user = data['user']
+        login = (user.get('user_metadata') or {}).get('login') or user.get('email', '')
+        expires_at = float(data.get('expires_at') or time.time() + int(data.get('expires_in') or 0))
+        return Session(user['id'], login, data['access_token'], data['refresh_token'], expires_at)
+
+    def _auth(self, path: str, body: dict) -> dict:
+        try:
+            return self._request('POST', f'/auth/v1/{path}', None, json=body)
+        except _HttpError as e:
+            if e.status == 400 and e.code == 'invalid_credentials':
+                raise InvalidCredentials('Неверный логин или пароль') from None
+            if e.status in (400, 401, 403):
+                raise SessionExpired('Сессия истекла — войдите снова') from None
+            raise StoreError(f'Ошибка входа ({e.status})') from None
+
+    def _request(self, method: str, path: str, token: Optional[str], json: Any = None,
+                 params: Optional[dict] = None, prefer: str = '') -> Any:
+        if not self._key:
+            raise StoreError('Не задан SUPABASE_ANON_KEY — впишите его в .env.local (см. .env.example)')
+        headers = {'apikey': self._key, 'Authorization': f'Bearer {token or self._key}'}
+        if prefer:
+            headers['Prefer'] = prefer
+        try:
+            res = requests.request(method, self._url + path, headers=headers, json=json, params=params,
+                                   timeout=_TIMEOUT_S)
+        except requests.RequestException as e:
+            logger.debug('Supabase недоступен: %r', e)
+            raise StoreError('База недоступна — запустите Supabase (npx supabase start)') from None
+        if res.ok:
+            return res.json() if res.content else None
+        body = res.json() if res.content and 'json' in res.headers.get('Content-Type', '') else {}
+        code = str(body.get('error_code') or body.get('code') or '')
+        if path.startswith('/auth/'):
+            raise _HttpError(res.status_code, code)
+        if res.status_code == 401:
+            raise SessionExpired('Сессия истекла — войдите снова')
+        logger.error('Ошибка базы: %s %s → %s %s %s', method, path, res.status_code, code, body.get('message', ''))
+        raise StoreError(f'Ошибка базы ({res.status_code})')
+
+
+def _read_env_file(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    pairs = (line.split('=', 1) for line in path.read_text('utf-8').splitlines()
+             if '=' in line and not line.lstrip().startswith('#'))
+    return {k.strip(): v.strip().strip('"\'') for k, v in pairs}
+
+
+def store_from_env() -> SupabaseStore:
+    """SUPABASE_URL / SUPABASE_ANON_KEY from the environment, else from .env.local (repo root, then cwd)."""
+    repo_root = Path(__file__).resolve().parents[2]
+    file_env = {**_read_env_file(repo_root / _ENV_FILE), **_read_env_file(Path.cwd() / _ENV_FILE)}
+
+    def get(name: str, default: str = '') -> str:
+        return os.environ.get(name) or file_env.get(name) or default
+
+    return SupabaseStore(get('SUPABASE_URL', DEFAULT_URL), get('SUPABASE_ANON_KEY'))

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "leadbombing",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-c", "from leadbombing.web import run_server; run_server(open_browser=False)"],
+      "port": 8666
+    }
+  ]
+}

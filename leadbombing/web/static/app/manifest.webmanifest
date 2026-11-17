@@ -1,0 +1,12 @@
+{
+  "name": "LeadBombing — лиды из 2ГИС",
+  "short_name": "LeadBombing",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f8",
+  "theme_color": "#5b5bd6",
+  "icons": [
+    {"src": "/static/app/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}

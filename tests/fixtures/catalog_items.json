@@ -1,0 +1,256 @@
+[
+  {
+    "id": "70000001007499623_abc",
+    "name": "Усадьба Банная, комплекс элитного отдыха",
+    "name_ex": {
+      "primary": "Усадьба Банная",
+      "extension": "комплекс элитного отдыха",
+      "legal_name": "ООО Усадьба"
+    },
+    "address_name": "Угрешская улица, 2 ст90",
+    "adm_div": [
+      {
+        "type": "city",
+        "name": "Москва"
+      },
+      {
+        "type": "district",
+        "name": "Печатники"
+      }
+    ],
+    "rubrics": [
+      {
+        "kind": "primary",
+        "name": "Бани и сауны",
+        "id": "100",
+        "short_id": 100
+      }
+    ],
+    "org": {
+      "name": "Усадьба Банная, комплекс элитного отдыха",
+      "branch_count": 1,
+      "id": "70000000"
+    },
+    "contact_groups": [
+      {
+        "contacts": [
+          {
+            "type": "phone",
+            "value": "+79587752088"
+          },
+          {
+            "type": "phone",
+            "value": "+74991112570"
+          },
+          {
+            "type": "whatsapp",
+            "url": "https://wa.me/79587752088?text=hi",
+            "value": "https://wa.me/79587752088?text=hi"
+          },
+          {
+            "type": "telegram",
+            "url": "https://t.me/+79035490939",
+            "value": "https://t.me/+79035490939"
+          },
+          {
+            "type": "email",
+            "value": "info@usadba.ru"
+          }
+        ]
+      }
+    ],
+    "attribute_groups": [
+      {
+        "name": "Бани / Сауны",
+        "attributes": [
+          {
+            "name": "До 25 человек"
+          },
+          {
+            "name": "Цена от 3 000 ₽"
+          },
+          {
+            "name": "бассейн"
+          },
+          {
+            "name": "бильярд"
+          }
+        ]
+      }
+    ],
+    "schedule": {
+      "is_24x7": true
+    },
+    "reviews": {
+      "general_rating": 4.7,
+      "general_review_count": 32
+    },
+    "point": {
+      "lat": 55.7,
+      "lon": 37.7
+    },
+    "external_content": [
+      {
+        "type": "photo_album",
+        "subtype": "common",
+        "main_photo_url": "https://i5.photo.2gis.com/x/common",
+        "count": 97
+      }
+    ],
+    "locale": "ru_RU",
+    "type": "branch"
+  },
+  {
+    "id": "70000001000000002",
+    "name": "Хлебниковские бани",
+    "address_name": "Лесная, 5",
+    "adm_div": [
+      {
+        "type": "city",
+        "name": "Москва"
+      }
+    ],
+    "rubrics": [
+      {
+        "kind": "primary",
+        "name": "Бани и сауны",
+        "id": "100",
+        "short_id": 100
+      }
+    ],
+    "contact_groups": [
+      {
+        "contacts": [
+          {
+            "type": "phone",
+            "value": "84957778899"
+          },
+          {
+            "type": "website",
+            "url": "https://link.2gis.ru/x",
+            "text": "hleb-bani.ru",
+            "value": "https://link.2gis.ru/x"
+          },
+          {
+            "type": "vkontakte",
+            "url": "https://vk.com/hleb",
+            "value": "https://vk.com/hleb"
+          }
+        ]
+      }
+    ],
+    "schedule": {
+      "Mon": {
+        "working_hours": [
+          {
+            "from": "10:00",
+            "to": "23:00"
+          }
+        ]
+      },
+      "Sat": {
+        "working_hours": [
+          {
+            "from": "09:00",
+            "to": "02:00"
+          }
+        ]
+      }
+    },
+    "locale": "ru_RU",
+    "type": "branch"
+  },
+  {
+    "id": "70000001000000003",
+    "name": "Фитнес-клуб Сила",
+    "address_name": "Тверская, 1",
+    "adm_div": [
+      {
+        "type": "city",
+        "name": "Москва"
+      }
+    ],
+    "rubrics": [
+      {
+        "kind": "primary",
+        "name": "Бани и сауны",
+        "id": "100",
+        "short_id": 100
+      },
+      {
+        "name": "Фитнес-клубы",
+        "id": "101",
+        "short_id": 101,
+        "kind": "additional"
+      }
+    ],
+    "contact_groups": [
+      {
+        "contacts": [
+          {
+            "type": "phone",
+            "value": "+79990001122"
+          }
+        ]
+      }
+    ],
+    "locale": "ru_RU",
+    "type": "branch"
+  },
+  {
+    "id": "70000001000000004",
+    "name": "Баня в Химках",
+    "address_name": "Ленина, 3",
+    "adm_div": [
+      {
+        "type": "city",
+        "name": "Химки"
+      },
+      {
+        "type": "region",
+        "name": "Московская область"
+      }
+    ],
+    "rubrics": [
+      {
+        "kind": "primary",
+        "name": "Бани и сауны",
+        "id": "100",
+        "short_id": 100
+      }
+    ],
+    "contact_groups": [
+      {
+        "contacts": [
+          {
+            "type": "phone",
+            "value": "+79990001133"
+          }
+        ]
+      }
+    ],
+    "locale": "ru_RU",
+    "type": "branch"
+  },
+  {
+    "id": "70000001007499623_dup",
+    "name": "Усадьба Банная, комплекс элитного отдыха",
+    "address_name": "Угрешская улица, 2 ст90",
+    "adm_div": [
+      {
+        "type": "city",
+        "name": "Москва"
+      }
+    ],
+    "rubrics": [
+      {
+        "kind": "primary",
+        "name": "Бани и сауны",
+        "id": "100",
+        "short_id": 100
+      }
+    ],
+    "locale": "ru_RU",
+    "type": "branch"
+  }
+]

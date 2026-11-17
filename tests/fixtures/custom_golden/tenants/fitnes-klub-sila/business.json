@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "sphere": "custom",
+  "timezone": "Europe/Moscow",
+  "locale": "ru-RU",
+  "currency": "RUB",
+  "legal": {
+    "operator_name": "ЗАГЛУШКА: оператор ПДн",
+    "privacy_policy_url": "https://example.com/privacy"
+  },
+  "policy": {
+    "deposit_percent": 0,
+    "free_cancellation_hours": 24,
+    "reschedule_pricing": "current"
+  },
+  "working_hours": {
+    "days": {
+      "mon": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      },
+      "tue": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      },
+      "wed": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      },
+      "thu": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      },
+      "fri": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      },
+      "sat": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      },
+      "sun": {
+        "start_from": "00:00",
+        "start_to": "24:00"
+      }
+    },
+    "max_end_after_close_min": 0
+  },
+  "exceptions": [],
+  "slug": "fitnes-klub-sila",
+  "name": "Фитнес-клуб Сила",
+  "theme": {
+    "accent": "#5b5bd6",
+    "wordmark": {
+      "main": "Фитнес-клуб Сила",
+      "sub": "свободный поиск · круглосуточно"
+    }
+  },
+  "pwa": {
+    "short_name": "Фитнес-клуб",
+    "description": "Онлайн-запись: Фитнес-клуб Сила"
+  },
+  "texts": {
+    "tagline": "круглосуточно",
+    "description": "",
+    "booking_note": ""
+  },
+  "contacts": {
+    "phone": "+7 999 000-11-22",
+    "address": "Москва, Тверская, 1"
+  },
+  "services": [
+    {
+      "key": "usluga",
+      "name": "Услуга",
+      "description": "",
+      "section": "",
+      "price_rub": null,
+      "price_from": false
+    }
+  ]
+}

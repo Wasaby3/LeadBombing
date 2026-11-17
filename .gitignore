@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+dist/
+.vscode/
+*.egg-info/
+.pytest_cache/
+build/
+.tox/
+.mypy_cache/
+.DS_Store
+.coverage
+.env.local
+supabase/.temp/
