@@ -34,6 +34,17 @@ function plural(n, [one, few, many]) {
 }
 const LEAD_WORDS = ['лид', 'лида', 'лидов'];
 
+/* Windows (lead card, dialogs): focus moves in on open, Tab stays inside, focus goes back on close. */
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), '
+  + '[tabindex]:not([tabindex="-1"])';
+const isVisible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
+const focusablesIn = (root) => [...root.querySelectorAll(FOCUSABLE)].filter(isVisible);
+/* flag → [window ref, fallback ref for the return when the opener is gone (e.g. a closed menu)] */
+const WINDOWS = {
+  selected: ['card', null], deleteOpen: ['deleteDialog', null], clearOpen: ['clearDialog', 'moreBtn'],
+  exportOpen: ['exportDialog', null], saveOpen: ['saveDialog', null],
+};
+
 function loadForm(saved = store.get(FORM_KEY, {})) {
   const form = { sphere: 'bani', query: '', cities: ['moscow'], limit: 100, showChrome: false, ...saved };
   if (!Array.isArray(form.cities) || !form.cities.length) form.cities = [saved.city || 'moscow'];
@@ -114,6 +125,12 @@ document.addEventListener('alpine:init', () => {
       this.$watch('form.query', () => this.formError.field === 'query' && this.clearFormError());
       this.$watch('form.cities', () => this.formError.field === 'cities' && this.clearFormError());
       this.$watch('form.sphere', () => this.clearFormError());
+      for (const [flag, [ref, fallback]] of Object.entries(WINDOWS)) {
+        this.$watch(flag, (open, was) => {
+          if (open && !was) this.focusWindow(flag, ref);
+          else if (!open && was) this.returnFocus(flag, fallback);
+        });
+      }
       this.$watch('exportPath', () => this.saveSettings());
       // Leaving the app must not lose a settings change still waiting for the debounced save.
       window.addEventListener('pagehide', () => this.flushSettings());
@@ -228,7 +245,7 @@ document.addEventListener('alpine:init', () => {
         const r = await api('/api/folders/save', body);
         this.folderId = r.folder.id;
         this.saveOpen = false;
-        this.notify(`Сохранено ${r.saved} в папку «${r.folder.name}»`);
+        this.notify(`В папку «${r.folder.name}» сохранено: ${r.saved} ${this.leadsWord(r.saved)}`);
       } catch (e) {
         this.notify(e.message);
       } finally {
@@ -361,6 +378,32 @@ document.addEventListener('alpine:init', () => {
       const visible = new Set(this.visible.map((l) => l.slug));
       const rest = this.picked.filter((x) => !visible.has(x));
       this.picked = on ? [...rest, ...visible] : rest;
+    },
+
+    focusWindow(flag, ref) {
+      this._openers = { ...this._openers, [flag]: document.activeElement };
+      this.$nextTick(() => {
+        const win = this.$refs[ref];
+        if (!win) return;
+        const first = [...win.querySelectorAll('[data-autofocus]')].find(isVisible) || (flag === 'selected' ? win : focusablesIn(win)[0]);
+        (first || win).focus({ preventScroll: flag === 'selected' });
+      });
+    },
+    returnFocus(flag, fallback) {
+      const opener = this._openers?.[flag];
+      this.$nextTick(() => {
+        const target = isVisible(opener) ? opener : this.$refs[fallback];
+        if (isVisible(target)) target.focus();
+      });
+    },
+    trapTab(e) {
+      const items = focusablesIn(e.currentTarget);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === e.currentTarget)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || active === e.currentTarget)) { e.preventDefault(); first.focus(); }
     },
 
     /* A wrong form field: the message goes under the form, the field is marked and focused. */
@@ -705,7 +748,7 @@ document.addEventListener('alpine:init', () => {
         store.set(PATH_KEY, this.exportPath);
         this.saveSettings();
         this.exportOpen = false;
-        this.notify(`Выгружено: добавлено ${r.added}, обновлено ${r.updated} → ${r.path}`);
+        this.notify(`Выгружено в ${r.path}: новых ${r.added}, обновлено ${r.updated}`);
       } catch (e) {
         this.notify(e.message);
       } finally {

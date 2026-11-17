@@ -498,8 +498,9 @@
 
   <!-- Lead card -->
   <div class="scrim" x-show="selected" x-transition.opacity @click="closeCard()"></div>
-  <aside class="card" x-show="selected" x-transition:enter="slide-in" x-transition:leave="slide-out"
-         role="dialog" aria-modal="true" aria-label="Карточка лида">
+  <aside class="card" x-show="selected" x-transition:enter="slide-in" x-transition:leave="slide-out" x-ref="card" tabindex="-1"
+         role="dialog" aria-modal="true" aria-label="Карточка лида" :aria-labelledby="card ? 'card-title' : null"
+         @keydown.tab="trapTab($event)">
     <template x-if="card">
       <div class="card-body">
         <div class="hero" :style="heroStyle">
@@ -511,7 +512,7 @@
             <svg x-show="allCollapsed" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg>
           </button>
           <div class="hero-text">
-            <h2 x-text="cardName"></h2>
+            <h2 id="card-title" x-text="cardName"></h2>
             <p x-text="[card.lead.district, card.lead.rating && ('★ ' + card.lead.rating + ' · ' + (card.lead.reviews || 0) + ' отзывов')].filter(Boolean).join(' · ')"></p>
           </div>
         </div>
@@ -678,51 +679,70 @@
 
   <!-- Delete a saved lead -->
   <div class="scrim over-card" x-show="deleteOpen" x-transition.opacity @click="deleteOpen = false"></div>
-  <div class="modal over-card" x-show="deleteOpen" x-transition role="alertdialog" aria-modal="true" aria-label="Удалить лид">
-    <h2 x-text="'Удалить «' + cardName + '»?'"></h2>
-    <p class="muted">Лид пропадёт из папки вместе со статусом, комментарием и фото. Отменить это нельзя.</p>
+  <div class="modal over-card" x-show="deleteOpen" x-transition x-ref="deleteDialog" role="alertdialog" aria-modal="true"
+       aria-labelledby="delete-title" aria-describedby="delete-text" @keydown.tab="trapTab($event)">
+    <h2 id="delete-title" x-text="'Удалить «' + cardName + '»?'"></h2>
+    <p class="muted" id="delete-text">Лид пропадёт из папки вместе со статусом, комментарием и фото. Отменить это нельзя.</p>
     <div class="modal-actions">
-      <button class="btn ghost" @click="deleteOpen = false">Отмена</button>
-      <button class="btn danger" :disabled="crmBusy" @click="deleteLead()" x-text="crmBusy ? 'Удаляем…' : 'Удалить'"></button>
+      <button type="button" class="btn ghost" data-autofocus @click="deleteOpen = false">Отмена</button>
+      <button type="button" class="btn danger" :disabled="crmBusy" @click="deleteLead()">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#trash-2"/></svg>
+        <span x-text="crmBusy ? 'Удаляем…' : 'Удалить лид'"></span>
+      </button>
     </div>
   </div>
 
-  <!-- Clear the found leads -->
+  <!-- Clear the search: the table, the run and the filters -->
   <div class="scrim" x-show="clearOpen" x-transition.opacity @click="clearOpen = false"></div>
-  <div class="modal" x-show="clearOpen" x-transition role="alertdialog" aria-modal="true" aria-label="Очистить таблицу">
-    <h2>Очистить лиды и фильтры?</h2>
-    <p class="muted">Таблица станет пустой, фильтры поиска вернутся к начальным, продолжить этот поиск будет нельзя.
-      Сохранённые папки «Лиды» и выгруженные файлы не пострадают — несохранённые лиды этого поиска пропадут.</p>
+  <div class="modal" x-show="clearOpen" x-transition x-ref="clearDialog" role="alertdialog" aria-modal="true"
+       aria-labelledby="clear-title" aria-describedby="clear-text" @keydown.tab="trapTab($event)">
+    <h2 id="clear-title">Очистить поиск?</h2>
+    <p class="muted" id="clear-text">Таблица станет пустой, фильтры поиска вернутся к начальным, продолжить этот поиск будет нельзя.
+      Сохранённые лиды и выгруженные файлы не пострадают — несохранённые лиды этого поиска пропадут.</p>
     <div class="modal-actions">
-      <button class="btn ghost" @click="clearOpen = false">Отмена</button>
-      <button class="btn danger" @click="clearLeads()">Очистить</button>
+      <button type="button" class="btn ghost" data-autofocus @click="clearOpen = false">Отмена</button>
+      <button type="button" class="btn danger" @click="clearLeads()">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#eraser"/></svg>
+        <span>Очистить поиск</span>
+      </button>
     </div>
   </div>
 
-  <!-- Export -->
+  <!-- Export into a folder on disk -->
   <div class="scrim" x-show="exportOpen" x-transition.opacity @click="exportOpen = false"></div>
-  <div class="modal" x-show="exportOpen" x-transition role="dialog" aria-modal="true" aria-label="Выгрузка">
-    <h2 x-text="(picked.length ? 'Выгрузить выбранные: ' : 'Выгрузить все: ') + exportCount"></h2>
-    <p class="muted">В папку запишутся <code>leads.json</code>, <code>outreach.csv</code> и <code>tenants/&lt;slug&gt;/</code>
-      с <code>business.json</code> и <code>images/hero.jpg</code>. Если база там уже есть — новые добавятся, найденные обновятся,
-      «Статус» и «Руководитель» сохранятся.</p>
+  <form class="modal" x-show="exportOpen" x-transition x-ref="exportDialog" role="dialog" aria-modal="true"
+        aria-labelledby="export-title" @submit.prevent="exportPath && !exporting && exportAll()" @keydown.tab="trapTab($event)">
+    <h2 id="export-title">Выгрузка в папку</h2>
+    <p class="muted"><span x-text="picked.length ? 'Выбранные лиды' : (onLeads ? 'Все лиды папки' : 'Все найденные лиды')"></span>:
+      <b x-text="exportCount + ' ' + leadsWord(exportCount)"></b>. В папку запишутся таблица для рассылки
+      <code>outreach.csv</code>, <code>leads.json</code> и <code>tenants/</code> с демо-данными и фото. Если база там уже
+      есть — новые лиды добавятся, найденные обновятся, «Статус» и «Руководитель» сохранятся.</p>
+    <label class="field" for="export-path"><span>Папка выгрузки</span></label>
     <div class="path-row">
-      <input type="text" x-model="exportPath" placeholder="/Users/…/leads/bani" spellcheck="false">
-      <button class="btn" @click="pickFolder()">Выбрать…</button>
+      <input type="text" id="export-path" name="export-path" x-model="exportPath" placeholder="/Users/…/leads/bani…"
+             spellcheck="false" autocomplete="off" data-autofocus>
+      <button type="button" class="btn" @click="pickFolder()">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-open"/></svg>
+        <span>Выбрать папку</span>
+      </button>
     </div>
     <div class="modal-actions">
-      <button class="btn ghost" @click="exportOpen = false">Отмена</button>
-      <button class="btn primary" :disabled="!exportPath || exporting" @click="exportAll()"
-              x-text="exporting ? 'Выгружаем…' : 'Выгрузить'"></button>
+      <button type="button" class="btn ghost" @click="exportOpen = false">Отмена</button>
+      <button type="submit" class="btn primary" :disabled="!exportPath || exporting">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#download"/></svg>
+        <span x-text="exporting ? 'Выгружаем…' : `Выгрузить ${exportCount} ${leadsWord(exportCount)}`"></span>
+      </button>
     </div>
-  </div>
+  </form>
 
-  <!-- Save leads into a folder -->
+  <!-- Save leads into a folder of the account («Лиды») -->
   <div class="scrim" x-show="saveOpen" x-transition.opacity @click="saveOpen = false"></div>
-  <form class="modal" x-show="saveOpen" x-transition role="dialog" aria-modal="true" aria-label="Сохранить лиды"
-        @submit.prevent="saveLeads()">
-    <h2 x-text="(picked.length ? 'Сохранить выбранные: ' : 'Сохранить все: ') + exportCount"></h2>
-    <p class="muted">Лиды с карточками и фото останутся в разделе «Лиды» — там с ними можно работать и выгрузить их позже.</p>
+  <form class="modal" x-show="saveOpen" x-transition x-ref="saveDialog" role="dialog" aria-modal="true"
+        aria-labelledby="save-title" @submit.prevent="saveLeads()" @keydown.tab="trapTab($event)">
+    <h2 id="save-title">Сохранить лиды в папку</h2>
+    <p class="muted"><span x-text="picked.length ? 'Выбранные лиды' : 'Все найденные лиды'"></span>:
+      <b x-text="exportCount + ' ' + leadsWord(exportCount)"></b>. Карточки и фото останутся в разделе «Лиды» — там с ними
+      можно работать и выгрузить их позже.</p>
     <div class="segmented" role="radiogroup" aria-label="Куда сохранить">
       <button type="button" role="radio" :aria-checked="saveForm.mode === 'new'" :class="{ on: saveForm.mode === 'new' }"
               @click="saveForm.mode = 'new'">Новая папка</button>
@@ -731,11 +751,11 @@
     </div>
     <label class="field save-target" x-show="saveForm.mode === 'new'">
       <span>Имя папки</span>
-      <input type="text" x-model="saveForm.name" maxlength="200" spellcheck="false">
+      <input type="text" name="folder-name" x-model="saveForm.name" maxlength="200" spellcheck="false" autocomplete="off" data-autofocus>
     </label>
     <label class="field save-target" x-show="saveForm.mode === 'add'">
       <span>Папка</span>
-      <select x-model.number="saveForm.folderId">
+      <select name="folder" x-model.number="saveForm.folderId">
         <template x-for="f in sameSphereFolders" :key="f.id">
           <option :value="f.id" x-text="`${f.name} (${f.count})`"></option>
         </template>
@@ -744,8 +764,10 @@
     <div class="modal-actions">
       <button type="button" class="btn ghost" @click="saveOpen = false">Отмена</button>
       <button type="submit" class="btn primary"
-              :disabled="saving || (saveForm.mode === 'new' ? !saveForm.name.trim() : !saveForm.folderId)"
-              x-text="saving ? 'Сохраняем…' : 'Сохранить'"></button>
+              :disabled="saving || (saveForm.mode === 'new' ? !saveForm.name.trim() : !saveForm.folderId)">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-plus"/></svg>
+        <span x-text="saving ? 'Сохраняем…' : 'Сохранить лиды'"></span>
+      </button>
     </div>
   </form>
 
