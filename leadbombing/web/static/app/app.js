@@ -341,6 +341,8 @@ document.addEventListener('alpine:init', () => {
     },
     get list() { return this.onLeads ? this.folderLeads : this.leads; },
     get exportCount() { return this.picked.length || this.list.length; },
+    /* Export: a saved folder with leads, or a new search (leads of past searches come back only for viewing). */
+    get canExport() { return this.onLeads ? this.folderLeads.length > 0 : this.leads.length > 0 && !this.fromAccount; },
     get allVisiblePicked() {
       return this.visible.length > 0 && this.visible.every((l) => this.picked.includes(l.slug));
     },
@@ -593,7 +595,6 @@ document.addEventListener('alpine:init', () => {
     statusOf(id) { return STATUSES.find((s) => s.id === id) || NEW_STATUS; },
     priorityTitle(id) { return PRIORITIES.find((p) => p.id === id)?.title || 'Нет'; },
     sortByPriority() { this.prioritySort = SORT_NEXT[this.prioritySort]; },
-    get prioritySortMark() { return { desc: '↓', asc: '↑' }[this.prioritySort] || ''; },
     /* PATCH the lead; `instant` shows the change before the server answers and rolls it back on an error. */
     async saveCrm(patch, { done = '', instant = false } = {}) {
       const slug = this.selected;

@@ -48,12 +48,12 @@
       <a href="/search" class="nav-item" :class="{ on: page === 'search' }" :aria-current="page === 'search' && 'page'"
          @click.prevent="go('search')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <span>Поиск лидов</span>
+        <span class="nav-full">Поиск лидов</span><span class="nav-short">Поиск</span>
       </a>
       <a href="/leads" class="nav-item" :class="{ on: page === 'leads' }" :aria-current="page === 'leads' && 'page'"
          @click.prevent="go('leads')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>
-        <span>Лиды</span>
+        <span class="nav-full">Сохранённые лиды</span><span class="nav-short">Сохранённые</span>
       </a>
       <a href="/settings" class="nav-item" :class="{ on: page === 'settings' }" :aria-current="page === 'settings' && 'page'"
          @click.prevent="go('settings')">
@@ -142,18 +142,11 @@
 
   <div x-show="page === 'leads'">
   <header class="top">
-    <h1 class="top-title">Лиды</h1>
-    <div class="top-actions">
-      <button class="btn ghost" @click="openFolder()" x-show="exportPath" :title="exportPath">Открыть папку</button>
-      <button class="btn primary" :disabled="!folderLeads.length" @click="exportOpen = true">
-        <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить папку'"></span>
-        <span class="badge" x-text="exportCount"></span>
-      </button>
-    </div>
+    <h1 class="top-title">Сохранённые лиды</h1>
   </header>
-  <div class="spheres" role="tablist" aria-label="Папки" x-show="folders.length">
+  <div class="spheres" role="radiogroup" aria-label="Папки" x-show="folders.length">
     <template x-for="f in folders" :key="f.id">
-      <button role="tab" class="chip" :class="{ on: folderId === f.id }" :aria-selected="folderId === f.id"
+      <button type="button" role="radio" class="chip" :class="{ on: folderId === f.id }" :aria-checked="folderId === f.id"
               @click="showFolder(f.id)"><span x-text="f.name"></span> <span class="muted" x-text="f.count"></span></button>
     </template>
   </div>
@@ -189,12 +182,12 @@
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-plus"/></svg>
           <span>Сохранить лиды</span>
         </button>
-        <button type="button" class="btn primary" x-show="!onLeads && leads.length && !fromAccount" @click="exportOpen = true">
+        <button type="button" class="btn primary" x-show="canExport" @click="exportOpen = true">
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#download"/></svg>
           <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить'"></span>
           <span class="badge" x-text="exportCount"></span>
         </button>
-        <div class="more" x-show="!onLeads" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
+        <div class="more" x-show="!onLeads || exportPath" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
           <button type="button" class="icon-btn" x-ref="moreBtn" aria-haspopup="menu" :aria-expanded="moreOpen"
                   aria-label="Ещё действия" title="Ещё действия" @click="toggleMore()">
             <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#ellipsis"/></svg>
@@ -205,7 +198,7 @@
               <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-open"/></svg>
               <span>Открыть папку выгрузки</span>
             </button>
-            <button type="button" role="menuitem" class="menu-item danger" :disabled="!canClear"
+            <button type="button" role="menuitem" class="menu-item danger" x-show="!onLeads" :disabled="!canClear"
                     @click="moreOpen = false; clearOpen = true">
               <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#eraser"/></svg>
               <span>Очистить поиск<small x-show="running">Сначала остановите поиск</small></span>
@@ -227,12 +220,13 @@
           <tr><th class="pick"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
                                     :indeterminate="picked.length > 0 && !allVisiblePicked"
                                     @change="toggleAll($event.target.checked)"></th>
-              <th class="num">#</th><th>Название</th>
+              <th class="num col-extra">#</th><th>Название</th>
               <th x-show="onLeads">Статус</th>
               <th x-show="onLeads" :aria-sort="{ desc: 'descending', asc: 'ascending' }[prioritySort] || 'none'">
                 <button type="button" class="sort-btn" @click="sortByPriority()" title="Сортировать по приоритету">Приоритет
-                  <span class="sort-mark" x-text="prioritySortMark"></span></button></th>
-              <th>Район</th><th class="num">Рейтинг</th>
+                  <svg class="icon sort-mark" aria-hidden="true" x-show="prioritySort === 'desc'"><use href="/static/app/vendor/icons.svg#arrow-down"/></svg>
+                  <svg class="icon sort-mark" aria-hidden="true" x-show="prioritySort === 'asc'"><use href="/static/app/vendor/icons.svg#arrow-up"/></svg></button></th>
+              <th class="col-extra">Район</th><th class="num col-extra">Рейтинг</th>
               <th>Канал</th><th x-text="pricesTitle"></th></tr>
         </thead>
         <tbody>
@@ -240,7 +234,7 @@
             <tr x-init="appear($el)" @click="openCard(l.slug)" :class="{ active: selected === l.slug }">
               <td class="pick" @click.stop><label class="pick-hit"><input type="checkbox" :aria-label="`Выбрать «${l.name}»`"
                                                    :checked="picked.includes(l.slug)" @change="togglePick(l.slug)"></label></td>
-              <td class="num muted" x-text="i + 1"></td>
+              <td class="num muted col-extra" x-text="i + 1"></td>
               <td>
                 <div class="name">
                   <span class="thumb" :class="{ empty: !l.has_photo }">
@@ -253,8 +247,8 @@
               </td>
               <td x-show="onLeads"><span class="st" :class="statusOf(l.status).id" x-text="statusOf(l.status).title"></span></td>
               <td x-show="onLeads"><span class="prio" :class="'p' + (l.priority || 0)" x-text="priorityTitle(l.priority || 0)"></span></td>
-              <td class="muted" x-text="l.district || '—'"></td>
-              <td class="num"><span x-show="l.rating" class="rating" x-text="l.rating"></span><span x-show="!l.rating" class="muted">—</span></td>
+              <td class="muted col-extra" x-text="l.district || '—'"></td>
+              <td class="num col-extra"><span x-show="l.rating" class="rating" x-text="l.rating"></span><span x-show="!l.rating" class="muted">—</span></td>
               <td><span class="channel" :class="channelKind(l.channel)" x-text="channelLabel(l.channel)"></span></td>
               <td class="prices muted" x-text="pricesShort(l.prices)"></td>
             </tr>
@@ -264,8 +258,12 @@
     </div>
 
     <div class="empty" x-show="onLeads && !list.length">
-      <h2 x-text="folders.length ? 'В папке пусто' : 'Лидов пока нет'"></h2>
+      <h2 x-text="folders.length ? 'В папке пусто' : 'Сохранённых лидов пока нет'"></h2>
       <p>Найдите лиды на странице поиска и нажмите «Сохранить лиды» — папка появится здесь.</p>
+      <a href="/search" class="btn" @click.prevent="go('search')">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#search"/></svg>
+        <span>Перейти к поиску</span>
+      </a>
     </div>
 
     <div class="empty" x-show="!onLeads && !list.length">

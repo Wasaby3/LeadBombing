@@ -90,6 +90,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .nav-item { display: flex; align-items: center; gap: 11px; height: 38px; padding: 0 10px; border-radius: 9px;
   color: var(--muted); text-decoration: none; font-weight: 550; transition: background .15s, color .15s; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-short { display: none; }
 .nav-item.on { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .nav-item svg, .icon-btn svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round; }
@@ -132,7 +133,6 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
   background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15px; letter-spacing: -.01em; }
 @keyframes pulse { 50% { opacity: .3; } }
-.top-actions { margin-left: auto; display: flex; gap: 8px; }
 .top-title { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
 
 /* Buttons */
@@ -272,6 +272,7 @@ tbody tr:hover, tbody tr.active { background: var(--surface-2); }
 .results > .empty { text-align: center; padding: 72px 24px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); }
 .results > .empty h2 { color: var(--text); font-size: 17px; font-weight: 600; margin: 0 0 6px; }
 .results > .empty p { margin: 0 auto; max-width: 520px; }
+.results > .empty .btn { margin-top: 16px; }
 
 /* Card drawer */
 .scrim { position: fixed; inset: 0; background: rgba(10, 10, 14, .35); z-index: 20; }
@@ -375,7 +376,8 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .prio.p0 { opacity: .6; }
 .sort-btn { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
 .sort-btn:hover { color: var(--text); }
-.sort-mark { color: var(--accent); font-weight: 700; }
+.sort-btn { display: inline-flex; align-items: center; gap: 4px; }
+.sort-mark { width: 13px; height: 13px; color: var(--accent); }
 
 .sub-label { font-size: 11.5px; color: var(--muted); font-weight: 500; margin: 2px 0 6px; }
 .sub-label:not(:first-child) { margin-top: 14px; }
@@ -435,6 +437,9 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .side-user { margin: 0; padding: 0; border: 0; }
   .nav { flex-direction: row; }
   .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 3px; height: 52px; font-size: 11px; }
+  .nav-item { min-width: 0; padding: 0 2px; }
+  .nav-full { display: none; }
+  .nav-short { display: inline; }
   .form-grid { grid-template-columns: 1fr; }
   .toast { bottom: 84px; }
   .bar { flex-wrap: wrap; }
@@ -442,7 +447,7 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .field.city, .field.limit { flex: 1; width: auto; }
   .btn.go { flex-basis: 100%; }
   .subbar { flex-direction: column; }
-  .top-actions .ghost { display: none; }
+  .col-extra { display: none; }
   /* Phone: filter and «Ещё» on the first row, the two actions share the second */
   .results-actions { width: 100%; margin-left: 0; display: grid; gap: 8px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; grid-template-areas: "filter filter more" "save export export"; }
@@ -450,6 +455,9 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .results-actions .btn { grid-area: save; padding: 0 8px; gap: 6px; }
   .results-actions .btn.primary { grid-area: export; }
   .results-actions .more { grid-area: more; }
+  /* No «Сохранить лиды» (the saved leads page, past searches): export takes the whole row */
+  .results-actions .btn[style*="display: none"] + .btn.primary { grid-column: 1 / -1; }
+  .name { min-width: 150px; }
   .subbar .toggle { margin-left: 0; }
   .log { white-space: normal; }
 }
