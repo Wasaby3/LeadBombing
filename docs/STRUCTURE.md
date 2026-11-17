@@ -14,15 +14,16 @@ leadbombing/            пакет
     contacts.py           все контакты карточки с подписями и ролями, выбор канала (руководитель первым)
     firm.py, prices.py, demo.py, text.py   общие части (firm.py: юрлицо, владелец ИП)
   web/                  Flask-приложение
-    server.py             создание приложения и страницы (/search, /saved, /settings, /profile, /docs, /classic)
+    server.py             создание приложения и страницы (/search, /leads, /settings, /profile, /docs, /classic)
     auth.py, account*.py  вход, сессия, данные аккаунта
     supabase.py           клиент Supabase (Auth + PostgREST)
     leads_api.py, leads_job.py   поиск лидов в фоне и выгрузка
-    folders_api.py        папки сохранённых лидов
+    folders_api.py        папки сохранённых лидов (страница «Лиды»), работа с лидом и удаление
+    lead_crm.py           статусы, приоритет, комментарий, каналы связи, демо: проверка изменений
     classic_api.py, job.py, history.py   старый дашборд /classic
     static/app/           фронтенд без сборки (Alpine.js, app.js, index.html, app.css, sw.js)
   data/                 списки городов и рубрик
-supabase/               config.toml, миграции (таблицы аккаунтов, запусков, лидов, папок), seed.sql
+supabase/               config.toml, миграции (таблицы аккаунтов, запусков, лидов, папок, работа с лидом), seed.sql
 tests/                  pytest; fixtures/*_golden/ — эталоны выгрузки
 scripts/                обновление списков городов и рубрик
 ```

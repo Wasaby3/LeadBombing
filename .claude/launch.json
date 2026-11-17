@@ -6,6 +6,12 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-c", "from leadbombing.web import run_server; run_server(open_browser=False)"],
       "port": 8666
+    },
+    {
+      "name": "leadbombing-8667",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-c", "from leadbombing.web import run_server; run_server(port=8667, open_browser=False)"],
+      "port": 8667
     }
   ]
 }

@@ -101,6 +101,26 @@ def register(app: Any, load_cities: Callable[[], list[dict]]) -> LeadsJob:
         job.stop()
         return jsonify({'ok': True})
 
+    @app.route('/api/leads/resume', methods=['POST'])
+    def leads_resume():
+        data = request.get_json(force=True, silent=True) or {}
+        try:
+            limit = min(_MAX_LIMIT, max(1, int(data['limit']))) if data.get('limit') else None
+            job.resume(limit, headless=bool(data.get('headless', True)))
+        except (ValueError, TypeError):
+            return fail('Неверный лимит')
+        except RuntimeError as e:
+            return fail(str(e), 409)
+        return jsonify({'ok': True})
+
+    @app.route('/api/leads/clear', methods=['POST'])
+    def leads_clear():
+        try:
+            job.clear()
+        except RuntimeError as e:
+            return fail(str(e), 409)
+        return jsonify({'ok': True})
+
     @app.route('/api/leads/status')
     def leads_status():
         return jsonify(job.snapshot(request.args.get('cursor', default=0, type=int)))

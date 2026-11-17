@@ -15,7 +15,7 @@
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
 <body>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="closeCard(); exportOpen = false; saveOpen = false; citiesOpen = false"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; clearOpen = false; citiesOpen = false"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -50,10 +50,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <span>Поиск лидов</span>
       </a>
-      <a href="/saved" class="nav-item" :class="{ on: page === 'saved' }" :aria-current="page === 'saved' && 'page'"
-         @click.prevent="go('saved')">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span>Сохранённые</span>
+      <a href="/leads" class="nav-item" :class="{ on: page === 'leads' }" :aria-current="page === 'leads' && 'page'"
+         @click.prevent="go('leads')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>
+        <span>Лиды</span>
       </a>
       <a href="/settings" class="nav-item" :class="{ on: page === 'settings' }" :aria-current="page === 'settings' && 'page'"
          @click.prevent="go('settings')">
@@ -86,6 +86,8 @@
     </div>
     <div class="top-actions">
       <button class="btn ghost" @click="openFolder()" x-show="exportPath" :title="exportPath">Открыть папку</button>
+      <button class="btn danger-ghost" :disabled="!canClear" @click="clearOpen = true"
+              :title="running ? 'Сначала остановите поиск' : 'Очистить найденные лиды и фильтры поиска'">Очистить</button>
       <button class="btn" :disabled="!leads.length || fromAccount || running" @click="openSave()"
               :title="fromAccount ? 'Сохранять можно лиды нового поиска' : ''">Сохранить лиды</button>
       <button class="btn primary" :disabled="!leads.length || fromAccount" @click="exportOpen = true"
@@ -103,7 +105,7 @@
                 :disabled="running" @click="pickSphere(s)" x-text="s.title"></button>
       </template>
     </div>
-    <form class="bar" @submit.prevent="running ? stop() : start()">
+    <form class="bar" @submit.prevent="submitSearch()">
       <label class="field grow">
         <span>Что ищем в 2ГИС</span>
         <input type="search" x-model="form.query" placeholder="Например: лофт, караоке, фотостудия" :disabled="running"
@@ -131,11 +133,15 @@
         <input type="number" min="1" max="2000" step="1" x-model.number="form.limit" :disabled="running">
       </label>
       <button class="btn go" :class="running ? 'danger' : 'primary'" type="submit">
-        <span x-text="running ? 'Остановить' : 'Найти лиды'"></span>
+        <span x-text="searchLabel"></span>
       </button>
     </form>
     <div class="subbar">
       <span class="note" x-text="sphere?.note"></span>
+      <span class="note changed" x-show="formChanged && !running">
+        Форма изменена — без «Найти лиды» она вернётся к прошлому поиску.
+        <button type="button" class="link" @click="restoreForm()">Вернуть</button>
+      </span>
       <label class="toggle"><input type="checkbox" x-model="form.showChrome" :disabled="running"> Показывать окно Chrome</label>
     </div>
   </section>
@@ -143,9 +149,9 @@
   <div class="alert" x-show="error" x-transition x-text="error"></div>
   </div>
 
-  <div x-show="page === 'saved'">
+  <div x-show="page === 'leads'">
   <header class="top">
-    <h1 class="top-title">Сохранённые лиды</h1>
+    <h1 class="top-title">Лиды</h1>
     <div class="top-actions">
       <button class="btn ghost" @click="openFolder()" x-show="exportPath" :title="exportPath">Открыть папку</button>
       <button class="btn primary" :disabled="!folderLeads.length" @click="exportOpen = true">
@@ -162,13 +168,16 @@
   </div>
   </div>
 
-  <section class="results" x-show="page === 'search' || onSaved">
+  <section class="results" x-show="page === 'search' || onLeads">
     <div class="results-head">
       <div class="counters">
         <span><b x-text="list.length"></b> лидов</span>
-        <template x-if="!onSaved">
+        <template x-if="!onLeads">
           <span class="counters">
-            <span class="muted" x-show="fromAccount">сохранены в кабинете</span>
+            <span class="muted" x-show="fromAccount">из прошлых поисков, сохранены в кабинете</span>
+            <span class="run-label" x-show="runLabel" :class="{ stale: !running && !sameRun }"
+                  :title="!running && !sameRun ? 'Найдено по другому запросу: форма поиска с тех пор изменена' : 'Параметры поиска этой таблицы'"
+                  x-text="runLabel"></span>
             <button class="link" @click="showSkipped = !showSkipped" :disabled="!skipped.length">
               <b x-text="skipped.length"></b> отсеяно
             </button>
@@ -179,7 +188,7 @@
       <input class="filter" type="search" placeholder="Фильтр по названию или району" x-model="filter" x-show="list.length">
     </div>
 
-    <div class="skipped" x-show="showSkipped && !onSaved" x-transition>
+    <div class="skipped" x-show="showSkipped && !onLeads" x-transition>
       <template x-for="[reason, n] in skippedByReason" :key="reason">
         <span class="pill"><span x-text="reason"></span> <b x-text="n"></b></span>
       </template>
@@ -191,7 +200,12 @@
           <tr><th class="pick"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
                                     :indeterminate="picked.length > 0 && !allVisiblePicked"
                                     @change="toggleAll($event.target.checked)"></th>
-              <th class="num">#</th><th>Название</th><th>Район</th><th class="num">Рейтинг</th>
+              <th class="num">#</th><th>Название</th>
+              <th x-show="onLeads">Статус</th>
+              <th x-show="onLeads" :aria-sort="{ desc: 'descending', asc: 'ascending' }[prioritySort] || 'none'">
+                <button type="button" class="sort-btn" @click="sortByPriority()" title="Сортировать по приоритету">Приоритет
+                  <span class="sort-mark" x-text="prioritySortMark"></span></button></th>
+              <th>Район</th><th class="num">Рейтинг</th>
               <th>Писать сюда</th><th x-text="pricesTitle"></th></tr>
         </thead>
         <tbody>
@@ -211,6 +225,8 @@
                   <span class="title" x-text="l.name"></span>
                 </div>
               </td>
+              <td x-show="onLeads"><span class="st" :class="statusOf(l.status).id" x-text="statusOf(l.status).title"></span></td>
+              <td x-show="onLeads"><span class="prio" :class="'p' + (l.priority || 0)" x-text="priorityTitle(l.priority || 0)"></span></td>
               <td class="muted" x-text="l.district || '—'"></td>
               <td class="num"><span x-show="l.rating" class="rating" x-text="l.rating"></span><span x-show="!l.rating" class="muted">—</span></td>
               <td><span class="channel" :class="channelKind(l.channel)" x-text="channelLabel(l.channel)"></span></td>
@@ -221,12 +237,12 @@
       </table>
     </div>
 
-    <div class="empty" x-show="onSaved && !list.length">
-      <h2 x-text="folders.length ? 'В папке пусто' : 'Сохранённых лидов пока нет'"></h2>
+    <div class="empty" x-show="onLeads && !list.length">
+      <h2 x-text="folders.length ? 'В папке пусто' : 'Лидов пока нет'"></h2>
       <p>Найдите лиды на странице поиска и нажмите «Сохранить лиды» — папка появится здесь.</p>
     </div>
 
-    <div class="empty" x-show="!onSaved && !list.length">
+    <div class="empty" x-show="!onLeads && !list.length">
       <template x-if="running"><p>Ищем в 2ГИС… Первые лиды появятся через минуту: Chrome проходит выдачу и открывает каждую фирму.</p></template>
       <template x-if="!running">
         <div>
@@ -293,6 +309,7 @@
       <a href="#docs-channel">6. Куда писать в первую очередь</a>
       <a href="#docs-legal">7. Юрлицо и владелец ИП</a>
       <a href="#docs-export">8. Выгрузка и сохранённые папки</a>
+      <a href="#docs-leads">9. Страница «Лиды»: работа с лидом</a>
     </nav>
 
     <article class="panel" id="docs-search">
@@ -304,6 +321,21 @@
         филиалов, все контакты. Никаких внешних сервисов, кроме 2ГИС, не используется.</p>
       <p>Если 2ГИС отвечает капчей или блокировкой (ошибка 403/429, пустая страница), поиск останавливается целиком —
         найденные до этого лиды сохраняются. Ошибка в одной фирме её пропускает и не останавливает поиск.</p>
+      <p><b>Остановить</b> прекращает поиск сразу: статус меняется в ту же секунду, Chrome закрывается в фоне. Фирма,
+        которую успели обработать целиком, ещё появится в таблице; недообработанная не считается.</p>
+      <p><b>Продолжить поиск</b> — эта кнопка появляется вместо «Найти лиды» после остановки или обрыва (капча, ошибка),
+        пока сфера, запрос и регионы совпадают с остановленным поиском. Поиск идёт с того же города и той же страницы
+        выдачи, уже найденные фирмы повторно не загружаются, лимит на город учитывает уже обработанные. Лимит и
+        «Показывать окно Chrome» можно поменять перед продолжением. Продолжить можно, пока приложение не закрыто.</p>
+      <p>Над таблицей видно, по какому поиску она собрана: запрос, сфера, регионы и лимит. Если форму с тех пор
+        поменяли, подпись становится красной — нажатие «Найти лиды» начнёт новый поиск и заменит таблицу.</p>
+      <p><b>Очистить</b> делает таблицу пустой, отменяет продолжение и возвращает фильтры к начальным (бани, Москва,
+        100 фирм; выбор «Показывать окно Chrome» остаётся). Сохранённые папки «Лиды» и выгруженные файлы не
+        трогаются; лиды прошлых поисков из кабинета после очистки на странице поиска не показываются.</p>
+      <p>Форма поиска (сфера, запрос, регионы, лимит, окно Chrome) всегда показывает последний запущенный поиск — тот,
+        к которому относится таблица. Если поменять форму и не нажать «Найти лиды», под формой появится подсказка, а
+        после перехода на другую страницу, перезагрузки или перезапуска приложения форма вернётся к последнему поиску.
+        Кнопка «Вернуть» в подсказке откатывает изменения сразу.</p>
     </article>
 
     <article class="panel" id="docs-filter">
@@ -406,8 +438,34 @@
         <code>leads.json</code> и папку <code>tenants/&lt;slug&gt;/</code> с <code>business.json</code> и обложкой
         для демо-страницы. Если в папке уже есть база, лиды добавляются и обновляются, а колонки «Статус» и
         «Руководитель» сохраняются. В папку другой сферы выгрузить нельзя.</p>
-      <p>«Сохранить лиды» кладёт найденное в папку в вашем кабинете (раздел «Сохранённые»), оттуда их можно выгрузить
+      <p>«Сохранить лиды» кладёт найденное в папку в вашем кабинете (раздел «Лиды»), оттуда их можно выгрузить
         позже. Подписи контактов и юрлицо хранятся только в карточке лида, в файлы выгрузки они не попадают.</p>
+
+    <article class="panel" id="docs-leads">
+      <h2>9. Страница «Лиды»: работа с сохранённым лидом</h2>
+      <p>«Сохранить лиды» на странице поиска кладёт лиды в папку кабинета, папки видны на странице «Лиды». В таблице
+        папки напротив каждого лида — его статус и приоритет. Клик по заголовку «Приоритет» сортирует: сначала высокий,
+        потом низкий, третий клик возвращает порядок папки.</p>
+      <p>Карточка лида на обеих страницах устроена одинаково, сверху вниз: «Контакты», «Услуги», «Юрлицо», «Работа с
+        клиентом». В «Работе с клиентом» на поиске — «Сообщение» и «Крючок». На странице «Лиды» там же статус и
+        приоритет, «Канал связи», «Демо-приложение», «Сообщение», «Крючок» и «Комментарий»:</p>
+      <ul>
+        <li><b>Статус</b> — вручную: <span class="st client">Наш клиент</span> <span class="st waiting">Ожидаем ответ</span>
+          <span class="st no_answer">Не ответил</span> <span class="st lost">Слился</span>. Новый лид —
+          <span class="st new">Новый</span>; повторный клик по выбранному статусу снимает его.</li>
+        <li><b>Приоритет</b> — высокий, средний, низкий или нет.</li>
+        <li><b>Канал связи</b> — галочки напротив контактов из карточки: по каким уже связывались.</li>
+        <li><b>Демо-приложение</b> — ссылка (только <code>http://</code> или <code>https://</code>) на демо, которое мы
+          предлагаем лиду, с кнопками «Открыть» и «Копировать». Сейчас её вписывают вручную; в базе предусмотрена
+          автоматическая загрузка в будущем.</li>
+        <li><b>Комментарий</b> — до 5000 символов, сохраняется кнопкой.</li>
+        <li><b>Удалить лид</b> (внизу карточки) — с подтверждением; лид пропадает из папки вместе со статусом, комментарием и фото.</li>
+      </ul>
+      <p>Разделы и подразделы карточки (на обеих страницах) сворачиваются кликом по заголовку, значок в шапке
+        сворачивает или разворачивает все сразу. При открытии лида все разделы развёрнуты.</p>
+      <p>Эти поля хранятся у лида в конкретной папке. Повторное сохранение того же лида из поиска обновляет его карточку,
+        но не трогает статус, комментарий и остальное. В файлы выгрузки они <b>не попадают</b>: колонка «Статус» в
+        <code>outreach.csv</code> — отдельная и заполняется при выгрузке как раньше.</p>
     </article>
   </section>
   </main>
@@ -420,6 +478,12 @@
       <div class="card-body">
         <div class="hero" :style="heroStyle">
           <button class="close" @click="closeCard()" aria-label="Закрыть">✕</button>
+          <button class="close fold-all" @click="toggleSections()"
+                  :aria-label="allCollapsed ? 'Развернуть все разделы' : 'Свернуть все разделы'"
+                  :title="allCollapsed ? 'Развернуть все разделы' : 'Свернуть все разделы'">
+            <svg x-show="!allCollapsed" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l5 5 5-5M7 20l5-5 5 5"/></svg>
+            <svg x-show="allCollapsed" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg>
+          </button>
           <div class="hero-text">
             <h2 x-text="cardName"></h2>
             <p x-text="[card.lead.district, card.lead.rating && ('★ ' + card.lead.rating + ' · ' + (card.lead.reviews || 0) + ' отзывов')].filter(Boolean).join(' · ')"></p>
@@ -433,42 +497,47 @@
         </div>
 
         <div class="block">
-          <h3>Крючок</h3>
-          <p x-text="card.row['Крючок']"></p>
-        </div>
-
-        <div class="block">
-          <h3>Сообщение <button class="link" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">копировать</button></h3>
-          <p class="message" x-text="card.row['Сообщение']"></p>
-        </div>
-
-        <div class="block">
-          <h3>Контакты <span class="count" x-text="cardContacts.length"></span></h3>
-          <ul class="contacts">
-            <template x-for="c in cardContacts" :key="c.title + c.value">
-              <li class="contact" :class="{ owner: c.role === 'owner' }">
-                <span class="contact-type" x-text="c.title"></span>
-                <div class="contact-main">
-                  <a x-show="c.href" :href="c.href" target="_blank" rel="noopener" x-text="c.value"></a>
-                  <span x-show="!c.href" x-text="c.value"></span>
-                  <div class="contact-label" x-show="c.label || c.role === 'owner'" :title="labelHint(c)">
-                    <span class="owner-badge" x-show="c.role === 'owner'"><svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></svg>Руководитель</span>
-                    <span :class="c.label_source" x-text="c.label"></span>
-                    <span class="default-note" x-show="c.label_source === 'default'">· по умолчанию</span>
+          <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('contacts')" @click="toggleSection('contacts')"><span class="chev" aria-hidden="true"></span>Контакты</button> <span class="count" x-text="cardContacts.length"></span></h3>
+          <div class="sec-body" x-show="isOpen('contacts')">
+            <ul class="contacts">
+              <template x-for="c in cardContacts" :key="c.title + c.value">
+                <li class="contact" :class="{ owner: c.role === 'owner' }">
+                  <span class="contact-type" x-text="c.title"></span>
+                  <div class="contact-main">
+                    <a x-show="c.href" :href="c.href" target="_blank" rel="noopener" x-text="c.value"></a>
+                    <span x-show="!c.href" x-text="c.value"></span>
+                    <div class="contact-label" x-show="c.label || c.role === 'owner'" :title="labelHint(c)">
+                      <span class="owner-badge" x-show="c.role === 'owner'"><svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></svg>Руководитель</span>
+                      <span :class="c.label_source" x-text="c.label"></span>
+                      <span class="default-note" x-show="c.label_source === 'default'">· по умолчанию</span>
+                    </div>
                   </div>
-                </div>
-              </li>
-            </template>
-          </ul>
-          <dl class="kv">
-            <div><dt>Адрес</dt><dd x-text="card.row['Адрес']"></dd></div>
-            <div><dt>Часы</dt><dd x-text="card.lead.hours"></dd></div>
-          </dl>
+                </li>
+              </template>
+            </ul>
+            <dl class="kv">
+              <div><dt>Адрес</dt><dd x-text="card.row['Адрес']"></dd></div>
+              <div><dt>Часы</dt><dd x-text="card.lead.hours"></dd></div>
+            </dl>
+          </div>
         </div>
 
         <div class="block">
-          <h3>Юрлицо</h3>
-          <dl class="kv">
+          <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('prices')" @click="toggleSection('prices')"><span class="chev" aria-hidden="true"></span>Услуги</button></h3>
+          <div class="sec-body" x-show="isOpen('prices')">
+            <ul class="prices-list">
+              <template x-for="p in cardPrices" :key="p.name">
+                <li><span x-text="p.name"></span><b x-text="p.price"></b></li>
+              </template>
+            </ul>
+            <p class="muted" x-show="!cardPrices.length">Во вкладке цен 2ГИС пусто — в выгрузке будет заглушка.</p>
+            <p class="muted small" x-show="card.lead.prices_updated" x-text="'Цены обновлены в 2ГИС: ' + card.lead.prices_updated"></p>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('legal')" @click="toggleSection('legal')"><span class="chev" aria-hidden="true"></span>Юрлицо</button></h3>
+          <dl class="kv sec-body" x-show="isOpen('legal')">
             <div><dt>Юрлицо</dt><dd :class="{ muted: !cardLegal.name }" x-text="cardLegal.name || 'в 2ГИС не указано'"></dd></div>
             <div x-show="cardLegal.owner">
               <dt>Владелец</dt>
@@ -477,15 +546,93 @@
           </dl>
         </div>
 
+        <!-- Работа с клиентом: message and hook; on «Лиды» also status, priority, channels, demo app and comment -->
         <div class="block">
-          <h3>Услуги</h3>
-          <ul class="prices-list">
-            <template x-for="p in cardPrices" :key="p.name">
-              <li><span x-text="p.name"></span><b x-text="p.price"></b></li>
+          <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('work')" @click="toggleSection('work')"><span class="chev" aria-hidden="true"></span>Работа с клиентом</button></h3>
+          <div class="sec-body" x-show="isOpen('work')">
+            <template x-if="onLeads && crm">
+              <div class="work-head">
+                <div class="sub-label">Статус</div>
+                <div class="status-pick" role="radiogroup" aria-label="Статус лида">
+                  <template x-for="s in statuses" :key="s.id">
+                    <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
+                            :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
+                      <span class="dot"></span><span x-text="s.title"></span></button>
+                  </template>
+                </div>
+                <p class="muted small" x-text="crm.status === 'new' ? 'Статус не выставлен — лид новый' : 'Повторный клик по статусу снимает его'"></p>
+                <div class="sub-label">Приоритет</div>
+                <div class="segmented" role="radiogroup" aria-label="Приоритет лида">
+                  <template x-for="pr in priorities" :key="pr.id">
+                    <button type="button" role="radio" :class="{ on: crm.priority === pr.id }" :aria-checked="crm.priority === pr.id"
+                            :disabled="crmBusy" @click="setPriority(pr.id)" x-text="pr.title"></button>
+                  </template>
+                </div>
+              </div>
             </template>
-          </ul>
-          <p class="muted" x-show="!cardPrices.length">Во вкладке цен 2ГИС пусто — в выгрузке будет заглушка.</p>
-          <p class="muted small" x-show="card.lead.prices_updated" x-text="'Цены обновлены в 2ГИС: ' + card.lead.prices_updated"></p>
+
+            <template x-if="onLeads && crm">
+              <div class="sub-sec">
+                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('channels')" @click="toggleSection('channels')"><span class="chev" aria-hidden="true"></span>Канал связи</button> <span class="count" x-text="crm.contacted.length || ''"></span></h4>
+                <div class="sec-body" x-show="isOpen('channels')">
+                  <p class="muted small">Отметьте, по каким контактам уже связывались</p>
+                  <ul class="contacted">
+                    <template x-for="c in cardContacts" :key="c.title + c.value">
+                      <li><label class="check">
+                        <input type="checkbox" :checked="isContacted(c)" :disabled="crmBusy" @change="toggleContacted(c)">
+                        <span class="contact-type" x-text="c.title"></span><span x-text="c.value"></span>
+                      </label></li>
+                    </template>
+                  </ul>
+                  <p class="muted" x-show="!cardContacts.length">В карточке 2ГИС нет контактов</p>
+                </div>
+              </div>
+            </template>
+
+            <template x-if="onLeads && crm">
+              <div class="sub-sec">
+                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('demo')" @click="toggleSection('demo')"><span class="chev" aria-hidden="true"></span>Демо-приложение</button></h4>
+                <div class="sec-body" x-show="isOpen('demo')">
+                  <div class="path-row">
+                    <input type="url" x-model="draft.demoUrl" placeholder="https://…" maxlength="2000" spellcheck="false"
+                           aria-label="Ссылка на демо-приложение" @keydown.enter="demoChanged && demoUrlValid && saveDemo()">
+                    <button class="btn" :disabled="!demoChanged || !demoUrlValid || crmBusy" @click="saveDemo()">Сохранить</button>
+                  </div>
+                  <p class="field-error" x-show="!demoUrlValid">Ссылка должна начинаться с http:// или https://</p>
+                  <div class="demo-saved" x-show="crm.demo_url">
+                    <a class="btn ghost" :href="crm.demo_url" target="_blank" rel="noopener">Открыть ↗</a>
+                    <button class="btn ghost" @click="copy(crm.demo_url, 'Ссылка скопирована')">Копировать</button>
+                    <span class="muted small" x-text="crm.demo_source === 'auto' ? 'загружено автоматически' : 'вписано вручную'"></span>
+                  </div>
+                  <p class="muted small" x-show="!crm.demo_url">Ссылка на демо-приложение, которое мы предлагаем этому лиду</p>
+                </div>
+              </div>
+            </template>
+
+            <div class="sub-sec">
+              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('message')" @click="toggleSection('message')"><span class="chev" aria-hidden="true"></span>Сообщение</button> <button class="link" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">копировать</button></h4>
+              <p class="message sec-body" x-show="isOpen('message')" x-text="card.row['Сообщение']"></p>
+            </div>
+
+            <div class="sub-sec">
+              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('hook')" @click="toggleSection('hook')"><span class="chev" aria-hidden="true"></span>Крючок</button></h4>
+              <p class="sec-body" x-show="isOpen('hook')" x-text="card.row['Крючок']"></p>
+            </div>
+
+            <template x-if="onLeads && crm">
+              <div class="sub-sec">
+                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('comment')" @click="toggleSection('comment')"><span class="chev" aria-hidden="true"></span>Комментарий</button></h4>
+                <div class="sec-body" x-show="isOpen('comment')">
+                  <textarea class="comment-field" rows="4" x-model="draft.comment" maxlength="5000"
+                            placeholder="Что обсудили, когда перезвонить…" aria-label="Комментарий"></textarea>
+                  <div class="row">
+                    <span class="muted small" x-text="draft.comment.length + ' / 5000'"></span>
+                    <button class="btn primary" :disabled="!commentChanged || crmBusy" @click="saveComment()">Сохранить</button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
 
         <details class="block">
@@ -494,10 +641,37 @@
         </details>
 
         <p class="muted small">Папка в выгрузке: <code x-text="card.lead.folder"></code></p>
+
+        <div class="block delete-zone" x-show="onLeads">
+          <button class="btn danger-ghost" @click="deleteOpen = true">Удалить лид</button>
+        </div>
       </div>
     </template>
     <div class="card-loading" x-show="!card">Загружаем карточку…</div>
   </aside>
+
+  <!-- Delete a saved lead -->
+  <div class="scrim over-card" x-show="deleteOpen" x-transition.opacity @click="deleteOpen = false"></div>
+  <div class="modal over-card" x-show="deleteOpen" x-transition role="alertdialog" aria-modal="true" aria-label="Удалить лид">
+    <h2 x-text="'Удалить «' + cardName + '»?'"></h2>
+    <p class="muted">Лид пропадёт из папки вместе со статусом, комментарием и фото. Отменить это нельзя.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" @click="deleteOpen = false">Отмена</button>
+      <button class="btn danger" :disabled="crmBusy" @click="deleteLead()" x-text="crmBusy ? 'Удаляем…' : 'Удалить'"></button>
+    </div>
+  </div>
+
+  <!-- Clear the found leads -->
+  <div class="scrim" x-show="clearOpen" x-transition.opacity @click="clearOpen = false"></div>
+  <div class="modal" x-show="clearOpen" x-transition role="alertdialog" aria-modal="true" aria-label="Очистить таблицу">
+    <h2>Очистить лиды и фильтры?</h2>
+    <p class="muted">Таблица станет пустой, фильтры поиска вернутся к начальным, продолжить этот поиск будет нельзя.
+      Сохранённые папки «Лиды» и выгруженные файлы не пострадают — несохранённые лиды этого поиска пропадут.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" @click="clearOpen = false">Отмена</button>
+      <button class="btn danger" @click="clearLeads()">Очистить</button>
+    </div>
+  </div>
 
   <!-- Export -->
   <div class="scrim" x-show="exportOpen" x-transition.opacity @click="exportOpen = false"></div>
@@ -522,7 +696,7 @@
   <form class="modal" x-show="saveOpen" x-transition role="dialog" aria-modal="true" aria-label="Сохранить лиды"
         @submit.prevent="saveLeads()">
     <h2 x-text="(picked.length ? 'Сохранить выбранные: ' : 'Сохранить все: ') + exportCount"></h2>
-    <p class="muted">Лиды с карточками и фото останутся в разделе «Сохранённые» — к ним можно вернуться и выгрузить позже.</p>
+    <p class="muted">Лиды с карточками и фото останутся в разделе «Лиды» — там с ними можно работать и выгрузить их позже.</p>
     <div class="segmented" role="radiogroup" aria-label="Куда сохранить">
       <button type="button" role="radio" :aria-checked="saveForm.mode === 'new'" :class="{ on: saveForm.mode === 'new' }"
               @click="saveForm.mode = 'new'">Новая папка</button>

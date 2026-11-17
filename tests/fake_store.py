@@ -6,6 +6,7 @@ import itertools
 import time
 from typing import Any, Optional
 
+from leadbombing.web.lead_crm import DEFAULT_CRM, crm_of
 from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError
 
 ADMIN_ID = 'a0000000-0000-4000-8000-000000000001'
@@ -120,17 +121,31 @@ class FakeStore:
         self._write(token)
         items = self.folder_items[folder_id]
         for lead in leads:
-            items.pop(lead['slug'], None)  # a re-added lead moves to the end, like a newer added_at
-            items[lead['slug']] = copy.deepcopy(lead)
+            old = items.pop(lead['slug'], None)  # a re-added lead moves to the end, like a newer added_at
+            work = crm_of(old) if old else DEFAULT_CRM  # the snapshot is replaced, the work on the lead is kept
+            items[lead['slug']] = {**copy.deepcopy(work), **copy.deepcopy(lead)}
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
-        return [copy.deepcopy(r['summary']) for r in self.folder_items.get(folder_id, {}).values()]
+        return [{**copy.deepcopy(r['summary']), 'status': r['status'], 'priority': r['priority']}
+                for r in self.folder_items.get(folder_id, {}).values()]
 
     def folder_card(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
         self._check(token)
         row = self.folder_items.get(folder_id, {}).get(slug)
-        return copy.deepcopy(row['card']) if row else None
+        return {**copy.deepcopy(row['card']), 'crm': copy.deepcopy(crm_of(row))} if row else None
+
+    def update_folder_lead(self, token: str, folder_id: int, slug: str, fields: dict) -> Optional[dict]:
+        self._write(token)
+        items = self.folder_items.get(folder_id, {})
+        if slug not in items:
+            return None
+        items[slug] = {**items[slug], **copy.deepcopy(fields)}
+        return copy.deepcopy(crm_of(items[slug]))
+
+    def delete_folder_lead(self, token: str, folder_id: int, slug: str) -> bool:
+        self._write(token)
+        return self.folder_items.get(folder_id, {}).pop(slug, None) is not None
 
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)

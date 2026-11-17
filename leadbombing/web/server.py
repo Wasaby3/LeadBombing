@@ -43,7 +43,7 @@ def _secret_key() -> str:
 
 
 def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
-    """Create the Flask app: the leads app at `/search`, `/saved`, `/profile`, `/settings`, `/docs`, the classic dashboard at
+    """Create the Flask app: the leads app at `/search`, `/leads`, `/profile`, `/settings`, `/docs`, the classic dashboard at
     `/classic`.
 
     Everything under /api/ (except /api/auth/*) needs a login; `store` is the Supabase account store.
@@ -69,8 +69,12 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
     def index():
         return redirect('/search')
 
-    @app.route('/search')
     @app.route('/saved')
+    def saved():  # the page was renamed to «Лиды»; old bookmarks still work
+        return redirect('/leads')
+
+    @app.route('/search')
+    @app.route('/leads')
     @app.route('/profile')
     @app.route('/settings')
     @app.route('/docs')

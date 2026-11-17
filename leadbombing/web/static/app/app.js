@@ -1,12 +1,23 @@
-/* LeadBombing PWA: login, side menu pages (search, saved, profile, settings, docs), search form, live leads table,
-   saved lead folders, lead card, export. Alpine.js + Motion. */
+/* LeadBombing PWA: login, side menu pages (search, leads, profile, settings, docs), search form, live leads table,
+   saved lead folders («Лиды») with the work on each lead, lead card, export. Alpine.js + Motion. */
 const POLL_MS = 900;
 const SAVE_SETTINGS_MS = 800;
 const TOAST_MS = 2600;
-const FORM_KEY = 'lb.form';
+const FORM_KEY = 'lb.form';  // the form of the last search started: unsent edits are dropped when leaving the page
 const PATH_KEY = 'lb.exportPath';
 const THEME_KEY = 'lb.theme';
-const PAGES = ['search', 'saved', 'profile', 'settings', 'docs'];
+const PAGES = ['search', 'leads', 'profile', 'settings', 'docs'];
+/* Work on a saved lead («Лиды»): statuses in the order of the picker, priorities from high to none. */
+const STATUSES = [
+  { id: 'client', title: 'Наш клиент' }, { id: 'waiting', title: 'Ожидаем ответ' },
+  { id: 'no_answer', title: 'Не ответил' }, { id: 'lost', title: 'Слился' },
+];
+const NEW_STATUS = { id: 'new', title: 'Новый' };
+const PRIORITIES = [{ id: 3, title: 'Высокий' }, { id: 2, title: 'Средний' }, { id: 1, title: 'Низкий' }, { id: 0, title: 'Нет' }];
+const SORT_NEXT = { '': 'desc', desc: 'asc', asc: '' };  // priority column: high first, low first, folder order
+/* Lead card sections, top to bottom; «Работа с клиентом» holds the sub-sections. All open when a lead is opened. */
+const SECTIONS = ['contacts', 'prices', 'legal', 'work'];
+const SUB_SECTIONS = ['channels', 'demo', 'message', 'hook', 'comment'];
 const CUSTOM = { id: 'custom', title: 'Свободный поиск', query: '', fixed_city: null,
   note: 'Свободный поиск: все фирмы из выдачи 2ГИС по вашему запросу, выгрузка как у шаблонов' };
 
@@ -15,6 +26,16 @@ function loadForm(saved = store.get(FORM_KEY, {})) {
   if (!Array.isArray(form.cities) || !form.cities.length) form.cities = [saved.city || 'moscow'];
   delete form.city;
   return form;
+}
+
+function cloneForm(form) {
+  return loadForm(JSON.parse(JSON.stringify(form)));
+}
+
+/* Field by field: Alpine tracks property reads, not JSON.stringify. */
+function sameForm(a, b) {
+  return a.sphere === b.sphere && a.query === b.query && a.limit === b.limit && a.showChrome === b.showChrome
+    && [...a.cities].sort().join() === [...b.cities].sort().join();
 }
 
 const store = {
@@ -37,10 +58,12 @@ function applyTheme(theme) {
 }
 applyTheme(store.get(THEME_KEY, ''));  // before first paint: no flash of the wrong theme
 
-async function api(path, body) {
-  const opts = body === undefined ? {} : {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  };
+async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
+  const opts = { method };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && !path.startsWith('/api/auth/')) window.dispatchEvent(new CustomEvent('lb-logout'));
@@ -56,8 +79,10 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('leadsApp', () => ({
     meta: { spheres: [], cities: [] },
     form: loadForm(),
+    searchForm: loadForm(),  // what the table was searched with; `form` returns to it unless «Найти лиды» is pressed
     citiesOpen: false, cityFilter: '', picked: [],
     status: 'idle', error: '', log: '', cursor: 0,
+    params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
     leads: [], skipped: [], filter: '', showSkipped: false,
     selected: null, card: null,
     exportOpen: false, exporting: false, exportPath: store.get(PATH_KEY, ''),
@@ -67,11 +92,15 @@ document.addEventListener('alpine:init', () => {
     page: pageFromPath(), theme: store.get(THEME_KEY, ''),
     folders: [], folderId: null, folderLeads: [],
     saveOpen: false, saving: false, saveForm: { mode: 'new', name: '', folderId: null },
+    statuses: STATUSES, priorities: PRIORITIES, prioritySort: '',
+    crm: null, draft: { comment: '', demoUrl: '' }, crmBusy: false, deleteOpen: false, collapsed: {},
 
     async init() {
       this.$watch('citiesOpen', (open) => open && this.$nextTick(() => this.$refs.cityFilter.focus()));
-      this.$watch('form', (f) => { store.set(FORM_KEY, f); this.saveSettings(); }, { deep: true });
       this.$watch('exportPath', () => this.saveSettings());
+      // Leaving the app must not lose a settings change still waiting for the debounced save.
+      window.addEventListener('pagehide', () => this.flushSettings());
+      document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && this.flushSettings());
       window.addEventListener('popstate', () => this.showPage(pageFromPath()));
       try {
         this.user = (await api('/api/auth/me')).login;
@@ -91,10 +120,11 @@ document.addEventListener('alpine:init', () => {
       }
       await this.loadSettings();
       if (!this.sphere) this.form.sphere = 'bani';
-      if (!this.form.query) this.form.query = this.sphere.query;
+      if (!this._hadForm && !this.form.query) this.form.query = this.sphere.query;  // first visit only
+      this.searchForm = cloneForm(this.form);
       await this.poll();  // restore the current run after a reload
-      if (!this.leads.length && !this.running) await this.loadSaved();
-      if (this.onSaved) await this.loadFolders();
+      if (!this.leads.length && !this.running && !this.searchCleared) await this.loadSaved();
+      if (this.onLeads) await this.loadFolders();
     },
 
     async signIn() {
@@ -131,13 +161,15 @@ document.addEventListener('alpine:init', () => {
       this.showPage(page);
     },
     showPage(page) {
+      if (page !== this.page) this.restoreForm();  // edits without «Найти лиды» do not outlive the page
       this.page = page;
       this.picked = [];
       this.filter = '';
+      this.prioritySort = '';
       this.closeCard();
-      if (page === 'saved') this.loadFolders();
+      if (page === 'leads') this.loadFolders();
     },
-    get onSaved() { return this.page === 'saved'; },
+    get onLeads() { return this.page === 'leads'; },
 
     async fetchFolders() {
       try {
@@ -187,7 +219,7 @@ document.addEventListener('alpine:init', () => {
       }
     },
     itemUrl(slug) {
-      return this.onSaved ? `/api/folders/${this.folderId}/item/${slug}` : `/api/leads/item/${slug}`;
+      return this.onLeads ? `/api/folders/${this.folderId}/item/${slug}` : `/api/leads/item/${slug}`;
     },
     get currentTheme() {
       return this.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -201,28 +233,57 @@ document.addEventListener('alpine:init', () => {
 
     async loadSettings() {
       this._settingsReady = false;
+      this._hadForm = store.get(FORM_KEY, null) !== null;
       try {
         const { settings } = await api('/api/account/settings');
         if (settings.form) this.form = loadForm(settings.form);
+        this._hadForm = this._hadForm || !!settings.form;
         if (settings.exportPath) this.exportPath = settings.exportPath;
+        this.searchCleared = !!settings.searchCleared;
       } catch (e) {
         if (e.status !== 401) this.notify(`Настройки не загружены: ${e.message}`);
       }
       await this.$nextTick();
       this._settingsReady = true;
     },
+    settingsBody() {
+      return { settings: { form: this.searchForm, exportPath: this.exportPath, searchCleared: this.searchCleared } };
+    },
+    /* The form of a search that was actually started becomes the one the page comes back to. */
+    rememberSearch() {
+      this.searchForm = cloneForm(this.form);
+      store.set(FORM_KEY, this.searchForm);
+      this.saveSettings();
+    },
+    restoreForm() {
+      this.form = cloneForm(this.searchForm);
+      this.citiesOpen = false;
+    },
+    get formChanged() { return !sameForm(this.form, this.searchForm); },
     saveSettings() {
       if (!this._settingsReady || !this.user) return;
       clearTimeout(this._saveTimer);
       this._saveTimer = setTimeout(() => {
-        api('/api/account/settings', { settings: { form: this.form, exportPath: this.exportPath } })
+        this._saveTimer = null;
+        api('/api/account/settings', this.settingsBody())
           .catch((e) => { if (e.status !== 401) this.notify(`Настройки не сохранены: ${e.message}`); });
       }, SAVE_SETTINGS_MS);
+    },
+    flushSettings() {
+      if (!this._saveTimer) return;
+      clearTimeout(this._saveTimer);
+      this._saveTimer = null;
+      fetch('/api/account/settings', {  // keepalive: the request survives the page being closed
+        method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.settingsBody()),
+      }).catch(() => { /* the form is also kept in localStorage */ });
     },
     async loadSaved() {
       try {
         const { leads } = await api('/api/account/leads');
-        this.leads = leads.map((l) => ({ ...l, has_photo: false }));  // photos stay in the run folder
+        // The same firm can be saved under several spheres: keep its newest row, the table is keyed by slug.
+        const fresh = leads.filter((l, i) => leads.findIndex((x) => x.slug === l.slug) === i);
+        this.leads = fresh.map((l) => ({ ...l, has_photo: false }));  // photos stay in the run folder
         this.fromAccount = this.leads.length > 0;
       } catch (e) {
         if (e.status !== 401) this.notify(`Лиды из кабинета не загружены: ${e.message}`);
@@ -244,21 +305,23 @@ document.addEventListener('alpine:init', () => {
       const on = new Set(this.form.cities);
       return [...list.filter((c) => on.has(c.code)), ...list.filter((c) => !on.has(c.code))];
     },
-    get list() { return this.onSaved ? this.folderLeads : this.leads; },
+    get list() { return this.onLeads ? this.folderLeads : this.leads; },
     get exportCount() { return this.picked.length || this.list.length; },
     get allVisiblePicked() {
       return this.visible.length > 0 && this.visible.every((l) => this.picked.includes(l.slug));
     },
     get running() { return this.status === 'running'; },
-    get isBani() { return (this.onSaved ? this.folder?.sphere : this.form.sphere) === 'bani'; },
+    get isBani() { return (this.onLeads ? this.folder?.sphere : this.form.sphere) === 'bani'; },
     get pricesTitle() { return this.isBani ? 'Залы' : 'Услуги'; },
     get statusText() {
       return { idle: 'Готов', running: 'Идёт поиск', done: 'Готово', stopped: 'Остановлено', error: 'Ошибка' }[this.status];
     },
     get visible() {
       const q = this.filter.trim().toLowerCase();
-      if (!q) return this.list;
-      return this.list.filter((l) => `${l.name} ${l.district}`.toLowerCase().includes(q));
+      const found = q ? this.list.filter((l) => `${l.name} ${l.district}`.toLowerCase().includes(q)) : this.list;
+      if (!this.onLeads || !this.prioritySort) return found;
+      const sign = this.prioritySort === 'desc' ? -1 : 1;
+      return [...found].sort((a, b) => sign * ((a.priority || 0) - (b.priority || 0)));  // stable: ties keep folder order
     },
     get skippedByReason() {
       const counts = {};
@@ -304,11 +367,86 @@ document.addEventListener('alpine:init', () => {
       }
       this.leads = []; this.skipped = []; this.picked = []; this.cursor = 0; this.fromAccount = false; this.closeCard();
       this.status = 'running';
+      this.searchCleared = false;
+      this.rememberSearch();
+      this.schedulePoll();
+    },
+
+    /* Continue a stopped or failed run from the city and page where it ended; the table keeps what was found. */
+    async resume() {
+      this.error = '';
+      this.citiesOpen = false;
+      try {
+        await api('/api/leads/resume', { limit: this.form.limit, headless: !this.form.showChrome });
+      } catch (e) {
+        this.error = e.message;
+        return;
+      }
+      this.status = 'running';
+      this.rememberSearch();  // a new limit or Chrome window choice is part of the search now
       this.schedulePoll();
     },
 
     async stop() {
+      this.status = 'stopped';  // the server stops at once; polling picks up the firm that was in progress
       await api('/api/leads/stop', {}).catch((e) => { this.error = e.message; });
+      this.schedulePoll();
+    },
+
+    async clearLeads() {
+      try {
+        await api('/api/leads/clear', {});
+      } catch (e) {
+        this.notify(e.message);
+        return;
+      }
+      this.clearOpen = false;
+      this.leads = []; this.skipped = []; this.picked = []; this.cursor = 0; this.fromAccount = false; this.closeCard();
+      this.status = 'idle'; this.params = null; this.resumable = false; this.log = ''; this.error = '';
+      this.searchCleared = true;  // leads of earlier runs are not brought back from the account either
+      this.resetForm();  // an empty table has no search behind it: the filters start over too
+    },
+    /* Default filters (bathhouses in Moscow); the Chrome window choice is a display setting and stays. */
+    defaultForm() {
+      const form = loadForm({ showChrome: this.searchForm.showChrome });
+      form.query = this.meta.spheres.find((s) => s.id === form.sphere)?.query || '';
+      return form;
+    },
+    resetForm() {
+      this.form = this.defaultForm();
+      this.rememberSearch();
+    },
+    get filtersSet() { return !sameForm(this.searchForm, this.defaultForm()) || this.formChanged; },
+
+    /* The run in the table matches the form: same sphere, query and cities (the limit may change on resume). */
+    get sameRun() {
+      const p = this.params;
+      if (!p) return false;
+      const query = (this.form.query || this.sphere?.query || '').trim();
+      const codes = (list) => [...list].sort().join(',');
+      return p.sphere === this.form.sphere && p.query === query && codes(p.cities) === codes(this.searchCities);
+    },
+    get canResume() { return !this.running && this.resumable && this.sameRun; },
+    get searchLabel() {
+      if (this.running) return 'Остановить';
+      return this.canResume ? 'Продолжить поиск' : 'Найти лиды';
+    },
+    submitSearch() {
+      if (this.running) return this.stop();
+      return this.canResume ? this.resume() : this.start();
+    },
+    get canClear() {
+      return !this.running && !this.busy
+        && (this.leads.length > 0 || this.skipped.length > 0 || !!this.params || this.filtersSet);
+    },
+    /* What the table holds: «query» · sphere · cities · limit of its run. */
+    get runLabel() {
+      const p = this.params;
+      if (!p || this.fromAccount) return '';
+      const sphere = p.sphere === CUSTOM.id ? null : this.meta.spheres.find((s) => s.id === p.sphere);
+      const names = p.cities.map((code) => this.meta.cities.find((c) => c.code === code)?.name || code);
+      const where = names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', ');
+      return [`«${p.query}»`, sphere?.title, where, `до ${p.limit} на город`].filter(Boolean).join(' · ');
     },
 
     schedulePoll() {
@@ -333,9 +471,12 @@ document.addEventListener('alpine:init', () => {
       }
       this.cursor = s.cursor;
       this.status = s.status;
+      this.params = s.params;
+      this.resumable = s.resumable;
+      this.busy = s.busy;
       this.log = (s.log || '').replace(/^\d\d:\d\d:\d\d\s*/, '');
       if (s.error) this.error = s.error;
-      if (this.running) this.schedulePoll();
+      if (this.running || this.busy) this.schedulePoll();
       else if (s.status === 'done' && s.events.length) this.notify(`Поиск завершён: ${this.leads.length} лидов`);
     },
 
@@ -346,14 +487,91 @@ document.addEventListener('alpine:init', () => {
     async openCard(slug) {
       this.selected = slug;
       this.card = null;
+      this.collapsed = {};
       try {
-        this.card = await api(this.itemUrl(encodeURIComponent(slug)));
+        const card = await api(this.itemUrl(encodeURIComponent(slug)));
+        if (this.selected !== slug) return;  // another lead was opened meanwhile
+        this.card = card;
+        this.crm = card.crm || null;  // kept apart from the card: a change does not re-render the card and its photo
+        this.draft = { comment: this.crm?.comment || '', demoUrl: this.crm?.demo_url || '' };
       } catch (e) {
         this.closeCard();
         this.notify(e.message);
       }
     },
-    closeCard() { this.selected = null; this.card = null; },
+    closeCard() { this.selected = null; this.card = null; this.crm = null; this.deleteOpen = false; },
+
+    /* Card sections fold one by one or all at once (the icon in the card header). */
+    isOpen(key) { return !this.collapsed[key]; },
+    toggleSection(key) { this.collapsed = { ...this.collapsed, [key]: !this.collapsed[key] }; },
+    get allCollapsed() { return SECTIONS.every((k) => this.collapsed[k]); },
+    toggleSections() {
+      this.collapsed = this.allCollapsed ? {} : Object.fromEntries([...SECTIONS, ...SUB_SECTIONS].map((k) => [k, true]));
+    },
+
+    /* Work on a saved lead: status, priority, contacted channels, demo app, comment, delete. */
+    statusOf(id) { return STATUSES.find((s) => s.id === id) || NEW_STATUS; },
+    priorityTitle(id) { return PRIORITIES.find((p) => p.id === id)?.title || 'Нет'; },
+    sortByPriority() { this.prioritySort = SORT_NEXT[this.prioritySort]; },
+    get prioritySortMark() { return { desc: '↓', asc: '↑' }[this.prioritySort] || ''; },
+    /* PATCH the lead; `instant` shows the change before the server answers and rolls it back on an error. */
+    async saveCrm(patch, { done = '', instant = false } = {}) {
+      const slug = this.selected;
+      const before = this.crm;
+      if (instant) this.crm = { ...before, ...patch };
+      this.crmBusy = true;
+      try {
+        const { crm } = await api(this.itemUrl(encodeURIComponent(slug)), patch, 'PATCH');
+        this.folderLeads = this.folderLeads.map((l) => (l.slug === slug ? { ...l, status: crm.status, priority: crm.priority } : l));
+        if (this.selected === slug) this.crm = crm;
+        if (done) this.notify(done);
+        return true;
+      } catch (e) {
+        if (this.selected === slug) this.crm = before;
+        if (e.status !== 401) this.notify(`Не сохранено: ${e.message}`);
+        return false;
+      } finally {
+        this.crmBusy = false;
+      }
+    },
+    setStatus(id) {
+      const status = this.crm.status === id ? NEW_STATUS.id : id;  // a second click takes the status off
+      this.saveCrm({ status }, { instant: true });
+    },
+    setPriority(id) { this.saveCrm({ priority: id }, { instant: true }); },
+    isContacted(c) { return (this.crm?.contacted || []).some((x) => x.title === c.title && x.value === c.value); },
+    toggleContacted(c) {
+      const others = this.crm.contacted.filter((x) => !(x.title === c.title && x.value === c.value));
+      const contacted = this.isContacted(c) ? others : [...others, { title: c.title, value: c.value }];
+      this.saveCrm({ contacted }, { instant: true });
+    },
+    get commentChanged() { return this.crm && this.draft.comment.trim() !== this.crm.comment; },
+    async saveComment() {
+      if (await this.saveCrm({ comment: this.draft.comment }, { done: 'Комментарий сохранён' })) this.draft.comment = this.crm.comment;
+    },
+    get demoChanged() { return this.crm && this.draft.demoUrl.trim() !== (this.crm.demo_url || ''); },
+    get demoUrlValid() { return !this.draft.demoUrl.trim() || /^https?:\/\/\S+$/i.test(this.draft.demoUrl.trim()); },
+    async saveDemo() {
+      const done = this.draft.demoUrl.trim() ? 'Ссылка на демо сохранена' : 'Ссылка на демо удалена';
+      if (await this.saveCrm({ demo_url: this.draft.demoUrl }, { done })) this.draft.demoUrl = this.crm.demo_url || '';
+    },
+    async deleteLead() {
+      const slug = this.selected;
+      this.crmBusy = true;
+      try {
+        await api(this.itemUrl(encodeURIComponent(slug)), undefined, 'DELETE');
+        this.folderLeads = this.folderLeads.filter((l) => l.slug !== slug);
+        this.folders = this.folders.map((f) => (f.id === this.folderId ? { ...f, count: f.count - 1 } : f));
+        this.picked = this.picked.filter((x) => x !== slug);
+        this.closeCard();
+        this.notify('Лид удалён');
+      } catch (e) {
+        this.deleteOpen = false;
+        if (e.status !== 401) this.notify(`Не удалено: ${e.message}`);
+      } finally {
+        this.crmBusy = false;
+      }
+    },
 
     get cardName() { return this.card ? (this.card.row['Баня'] || this.card.row['Название']) : ''; },
     get cardPrices() {
@@ -446,7 +664,7 @@ document.addEventListener('alpine:init', () => {
       try {
         const body = { path: this.exportPath };
         if (this.picked.length) body.slugs = this.picked;
-        const r = await api(this.onSaved ? `/api/folders/${this.folderId}/export` : '/api/leads/export', body);
+        const r = await api(this.onLeads ? `/api/folders/${this.folderId}/export` : '/api/leads/export', body);
         store.set(PATH_KEY, this.exportPath);
         this.saveSettings();
         this.exportOpen = false;

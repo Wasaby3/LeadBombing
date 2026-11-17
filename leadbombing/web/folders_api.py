@@ -1,4 +1,5 @@
-"""Saved leads by folders: save the current run's leads into a folder, browse folders, export a folder.
+"""Saved leads by folders (the «Лиды» page): save the current run's leads into a folder, browse folders, export a
+folder, work on a lead (status, priority, comment, contacted channels, demo app) and delete it.
 
 A folder lead is a snapshot (table row, card, raw firm data) in Supabase; its hero photo is on disk.
 """
@@ -11,6 +12,7 @@ from ..leads.spheres import get_sphere
 from ..logger import logger
 from ..paths import user_path
 from .leads_api import _SLUG_RE, export_args, run_export, slugs_arg
+from .lead_crm import parse_patch
 from .leads_job import LeadsJob, export_raw
 from .supabase import SessionExpired, StoreError
 
@@ -43,6 +45,14 @@ def _store_heroes(folder_id: int, raw: list[dict]) -> None:
             path.write_bytes(r['hero'])
         except OSError as e:
             logger.warning('Фото %s не сохранено в папку: %r', r['slug'], e)
+
+
+def _drop_hero(folder_id: int, slug: str) -> None:
+    """Remove a deleted lead's photo; a failed removal only leaves a file behind."""
+    try:
+        _hero_path(folder_id, slug).unlink(missing_ok=True)
+    except OSError as e:
+        logger.warning('Фото %s не удалено из папки: %r', slug, e)
 
 
 def _merge_cities(old: list[dict], new: list[dict]) -> list[dict]:
@@ -129,6 +139,32 @@ def register(app: Any, job: LeadsJob) -> None:
             found = store.folder_card(token, folder_id, slug)
             return jsonify(found) if found else fail('Лид не найден', 404)
         return with_store(card)
+
+    @app.route('/api/folders/<int:folder_id>/item/<slug>', methods=['PATCH'])
+    def folders_item_update(folder_id: int, slug: str):
+        if not _SLUG_RE.match(slug):
+            return fail('Лид не найден', 404)
+        try:
+            fields = parse_patch(request.get_json(silent=True))
+        except ValueError as e:
+            return fail(str(e))
+
+        def update(store: Any, token: str):
+            crm = store.update_folder_lead(token, folder_id, slug, fields)
+            return jsonify({'ok': True, 'crm': crm}) if crm is not None else fail('Лид не найден', 404)
+        return with_store(update)
+
+    @app.route('/api/folders/<int:folder_id>/item/<slug>', methods=['DELETE'])
+    def folders_item_delete(folder_id: int, slug: str):
+        if not _SLUG_RE.match(slug):
+            return fail('Лид не найден', 404)
+
+        def delete(store: Any, token: str):
+            if not store.delete_folder_lead(token, folder_id, slug):
+                return fail('Лид не найден', 404)
+            _drop_hero(folder_id, slug)
+            return jsonify({'ok': True})
+        return with_store(delete)
 
     @app.route('/api/folders/<int:folder_id>/item/<slug>/hero')
     def folders_hero(folder_id: int, slug: str):

@@ -11,6 +11,7 @@ from typing import Any, Optional
 import requests
 
 from ..logger import logger
+from .lead_crm import CRM_FIELDS, crm_of
 
 DEFAULT_URL = 'http://127.0.0.1:55321'
 LOGIN_DOMAIN = 'leadbombing.local'  # Supabase logs in by email: login `admin` is admin@leadbombing.local
@@ -19,6 +20,7 @@ _ENV_FILE = '.env.local'
 _RUN_FIELDS = 'id,sphere,query,cities,lead_limit,status,accepted,skipped,error,started_at,finished_at'
 _FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at'
 _FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
+_CRM_SELECT = ','.join(CRM_FIELDS)
 
 
 class StoreError(RuntimeError):
@@ -136,7 +138,8 @@ class SupabaseStore:
                  'count': r['folder_leads'][0]['count'] if r['folder_leads'] else 0} for r in rows]
 
     def add_to_folder(self, token: str, folder_id: int, leads: list[dict]) -> None:
-        """Insert leads ({slug, summary, card, raw}) in order; a lead already in the folder is replaced."""
+        """Insert leads ({slug, summary, card, raw}) in order; a lead already in the folder gets the new snapshot
+        and keeps the work on it (only the sent columns are merged)."""
         base = datetime.now(timezone.utc)
         rows = [{**lead, 'folder_id': folder_id, 'added_at': (base + timedelta(microseconds=i)).isoformat()}
                 for i, lead in enumerate(leads)]
@@ -146,14 +149,29 @@ class SupabaseStore:
                           prefer='resolution=merge-duplicates,return=minimal')
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
+        """Table rows in folder order, each with the lead's status and priority."""
         rows = self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'summary', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
-        return [r['summary'] for r in rows]
+            'select': 'summary,status,priority', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+        return [{**r['summary'], 'status': r['status'], 'priority': r['priority']} for r in rows]
 
     def folder_card(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
+        """The lead card with the work on it (`crm`), or None."""
         rows = self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'card', 'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}'})
-        return rows[0]['card'] if rows else None
+            'select': f'card,{_CRM_SELECT}', 'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}'})
+        return {**rows[0]['card'], 'crm': crm_of(rows[0])} if rows else None
+
+    def update_folder_lead(self, token: str, folder_id: int, slug: str, fields: dict) -> Optional[dict]:
+        """Change the work on a lead (fields from lead_crm); the lead's crm after it, None if there is no such lead."""
+        rows = self._request('PATCH', '/rest/v1/folder_leads', token, json={**fields, 'worked_at': _now()},
+                             params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}', 'select': _CRM_SELECT},
+                             prefer='return=representation')
+        return crm_of(rows[0]) if rows else None
+
+    def delete_folder_lead(self, token: str, folder_id: int, slug: str) -> bool:
+        rows = self._request('DELETE', '/rest/v1/folder_leads', token,
+                             params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}', 'select': 'slug'},
+                             prefer='return=representation')
+        return bool(rows)
 
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         """[{slug, raw: {item, prices}}] in folder order, for export."""

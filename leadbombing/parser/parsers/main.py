@@ -34,6 +34,7 @@ class MainParser:
                  parser_options: ParserOptions) -> None:
         self._options = parser_options
         self._url = url
+        self.page = 1  # search results page being parsed; a stopped run resumes from it
 
         # "Catalog Item Document" response pattern.
         self._item_response_pattern = r'https://catalog\.api\.2gis.[^/]+/.*/items/byid'
@@ -226,8 +227,11 @@ class MainParser:
         # Leads writer loads the prices tab itself, only for firms that pass its filters.
         if hasattr(writer, 'fetch_state'):
             writer.fetch_state = self._fetch_state
+        # A resumed leads run skips the firms it already has without loading them again.
+        skip_firm = getattr(writer, 'skip_firm', None)
 
         while True:
+            self.page = current_page_number
             # Wait all 2GIS requests get finished
             self._wait_requests_finished()
 
@@ -239,6 +243,8 @@ class MainParser:
                 # Iterate through gathered links
                 for link in links:
                     firm_id = re.search(r'/firm/(\d+)', link.attributes.get('href', ''))
+                    if firm_id and skip_firm and skip_firm(firm_id.group(1)):
+                        continue
                     doc = None
                     for _ in range(3):  # 3 attempts to get item
                         # Delay between clicks, could be usefull if

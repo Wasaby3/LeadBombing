@@ -77,11 +77,30 @@ def test_folder_round_trip(token):
     assert (folder['name'], folder['count'], len(folder['cities'])) == ('Тест', 2, 2)
     assert store.get_folder(token, folder_id)['query'] == 'бани'
     assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b', 'a']
-    assert store.folder_leads(token, folder_id) == [{'name': 'А'}, {'name': 'А'}]
-    assert store.folder_card(token, folder_id, 'a') == {'row': {'Название': 'А2'}}
+    assert store.folder_leads(token, folder_id) == [{'name': 'А', 'status': 'new', 'priority': 0}] * 2
+    assert store.folder_card(token, folder_id, 'a')['row'] == {'Название': 'А2'}
     assert store.folder_card(token, folder_id, 'zzz') is None
 
 
 def test_anonymous_requests_see_nothing():
     r = requests.get(f'{store._url}/rest/v1/leads', headers={'apikey': store._key}, timeout=10)
     assert r.status_code in (401, 403)
+
+
+def test_folder_lead_work_round_trip(token):
+    folder_id = store.create_folder(token, {'name': 'CRM', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {}, 'prices': None}}
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b'}])
+    assert store.folder_card(token, folder_id, 'a')['crm']['status'] == 'new'
+
+    crm = store.update_folder_lead(token, folder_id, 'a', {'status': 'client', 'priority': 2, 'comment': 'да',
+                                                           'demo_url': 'https://d.example', 'demo_source': 'manual'})
+    assert (crm['status'], crm['priority'], crm['demo_source']) == ('client', 2, 'manual')
+    assert store.update_folder_lead(token, folder_id, 'zzz', {'status': 'lost'}) is None
+    store.add_to_folder(token, folder_id, [lead])  # re-saving keeps the work
+    assert store.folder_card(token, folder_id, 'a')['crm']['comment'] == 'да'
+    assert store.folder_leads(token, folder_id)[1] == {'name': 'А', 'status': 'client', 'priority': 2}
+
+    assert store.delete_folder_lead(token, folder_id, 'a') is True
+    assert store.delete_folder_lead(token, folder_id, 'a') is False
+    assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b']

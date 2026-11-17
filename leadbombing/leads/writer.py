@@ -22,6 +22,10 @@ KEEP = ('Статус', 'Руководитель')  # filled by hand, never ove
 CARD_KEYS = ('lead', 'row', 'business', 'contacts', 'legal')  # what the web app keeps of a `lead` event
 
 
+class RunCancelled(Exception):
+    """The run was stopped by the user while a firm was being processed."""
+
+
 def firm_id_of(url: str) -> str:
     m = re.search(r'/firm/(\d+)', url or '')
     return m.group(1) if m else ''
@@ -52,6 +56,9 @@ class LeadsWriter:
         self.raw: list[dict] = []
         # Set by MainParser: (page path, JS expression over its initialState `s`) -> value.
         self.fetch_state: Optional[Callable[[str, str], Any]] = None
+        # Set by the web app: True once the user stopped the run; the firm in progress is then not counted.
+        self.cancelled: Callable[[], bool] = lambda: False
+        self._resumed_ids: frozenset[str] = frozenset()
 
     def __enter__(self) -> LeadsWriter:
         (self._base / 'tenants').mkdir(parents=True, exist_ok=True)
@@ -96,13 +103,30 @@ class LeadsWriter:
             self._skip('нет данных')
             return
         name = item.get('name') or item.get('id', '?')
+        if self.cancelled():
+            raise RunCancelled()
         try:
             self._process(item)
         except ParserException:
             raise  # captcha / block: stop the run
         except Exception as e:  # one bad firm must not stop the run
+            if self.cancelled():  # the browser was closed under it: fetch this firm again on resume
+                self._forget(item)
+                raise RunCancelled() from e
             self._errors.append(f'{name}: {e!r}')
             self._skip('ошибка обработки', name)
+
+    def mark_resume(self) -> None:
+        """A resumed run skips the firms seen so far without fetching them again (see `skip_firm`)."""
+        self._resumed_ids = frozenset(self._seen)
+
+    def skip_firm(self, firm_id: str) -> bool:
+        """Asked by MainParser before fetching a firm: True for firms done before the run was resumed."""
+        return firm_id in self._resumed_ids
+
+    def _forget(self, item: dict) -> None:
+        self._seen.discard(firm.firm_id(item))
+        self._seen_keys.discard((firm.short_name(item).lower(), (item.get('address_name') or '').lower()))
 
     def add(self, item: dict, prices: Optional[dict], hero: Optional[bytes]) -> None:
         """Store an already filtered firm (e.g. replayed from another run); known firms are updated."""
