@@ -85,6 +85,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .main { width: 100%; max-width: 1280px; padding: 0 28px 64px; }
 .side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 22px; padding: 18px 12px;
   background: var(--surface); border-right: 1px solid var(--line); z-index: 6; }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 2px; }
 .side .brand { padding: 4px 10px; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item { display: flex; align-items: center; gap: 11px; height: 38px; padding: 0 10px; border-radius: 9px;
@@ -92,8 +93,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-short { display: none; }
 .nav-item.on { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-.nav-item svg, .icon-btn svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8;
-  stroke-linecap: round; stroke-linejoin: round; }
+.nav-item .icon { width: 18px; height: 18px; }
 .side-user { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px 6px 0 10px; border-top: 1px solid var(--line); }
 .me { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;
   border-radius: 9px; padding: 4px; margin-left: -4px; }
@@ -432,7 +432,10 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .side { position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-right: 0; border-top: 1px solid var(--line); z-index: 15; }
   .side { flex-direction: row; align-items: center; gap: 8px; }
-  .side .brand, .side-user .user, .side-user .icon-btn { display: none; }
+  .side .brand, .side-user .user { display: none; }
+  /* Phones: the bottom bar is full, the theme button sits at the top right of the page title row */
+  .theme-btn { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 12px; z-index: 16;
+    width: 40px; height: 40px; background: var(--surface); border: 1px solid var(--line); }
   .nav { flex: 1; }
   .side-user { margin: 0; padding: 0; border: 0; }
   .nav { flex-direction: row; }

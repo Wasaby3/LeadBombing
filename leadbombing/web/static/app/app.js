@@ -76,9 +76,18 @@ function pageFromPath() {
   return PAGES.includes(page) ? page : 'search';
 }
 
+/* Theme: '' follows the system, 'light' / 'dark' is the user's choice (the header button or Настройки). */
+const THEME_CHOICES = [{ id: 'light', title: 'Светлая' }, { id: 'dark', title: 'Тёмная' }, { id: '', title: 'Как в системе' }];
+const THEME_BG = { light: '#f7f7f8', dark: '#0e0f11' };  // --bg of each theme, for the browser chrome
+const DARK_QUERY = matchMedia('(prefers-color-scheme: dark)');
+
 function applyTheme(theme) {
   if (theme) document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    const own = meta.media.includes('dark') ? THEME_BG.dark : THEME_BG.light;
+    meta.content = theme ? THEME_BG[theme] : own;
+  }
 }
 applyTheme(store.get(THEME_KEY, ''));  // before first paint: no flash of the wrong theme
 
@@ -113,7 +122,7 @@ document.addEventListener('alpine:init', () => {
     toast: '', _toastTimer: null, _pollTimer: null,
     user: null, authChecked: false, auth: { login: '', password: '', error: '', busy: false },
     fromAccount: false, _settingsReady: false, _saveTimer: null,
-    page: pageFromPath(), theme: store.get(THEME_KEY, ''),
+    page: pageFromPath(), theme: store.get(THEME_KEY, ''), systemDark: DARK_QUERY.matches, themeChoices: THEME_CHOICES,
     folders: [], folderId: null, folderLeads: [],
     saveOpen: false, saving: false, saveForm: { mode: 'new', name: '', folderId: null },
     statuses: STATUSES, priorities: PRIORITIES, prioritySort: '',
@@ -136,6 +145,7 @@ document.addEventListener('alpine:init', () => {
       window.addEventListener('pagehide', () => this.flushSettings());
       document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && this.flushSettings());
       window.addEventListener('popstate', () => this.showPage(pageFromPath()));
+      DARK_QUERY.addEventListener('change', (e) => { this.systemDark = e.matches; });
       try {
         this.user = (await api('/api/auth/me')).login;
       } catch (e) {
@@ -255,14 +265,15 @@ document.addEventListener('alpine:init', () => {
     itemUrl(slug) {
       return this.onLeads ? `/api/folders/${this.folderId}/item/${slug}` : `/api/leads/item/${slug}`;
     },
-    get currentTheme() {
-      return this.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    },
+    get currentTheme() { return this.theme || (this.systemDark ? 'dark' : 'light'); },
     setTheme(theme) {
       this.theme = theme;
       store.set(THEME_KEY, theme);
       applyTheme(theme);
     },
+    /* The header button picks the other theme explicitly; «Как в системе» stays in Настройки. */
+    toggleTheme() { this.setTheme(this.currentTheme === 'dark' ? 'light' : 'dark'); },
+    get themeToggleLabel() { return this.currentTheme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'; },
     get initial() { return (this.user || '?').slice(0, 1).toUpperCase(); },
 
     async loadSettings() {
