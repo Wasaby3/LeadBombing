@@ -12,3 +12,4 @@ build/
 .coverage
 .env.local
 supabase/.temp/
+.playwright-mcp/
