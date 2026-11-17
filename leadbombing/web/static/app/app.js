@@ -692,6 +692,11 @@ document.addEventListener('alpine:init', () => {
       }[contact.label_source] || '';
     },
     get writeHref() { return this.card ? this.contactHref('', this.card.row['Писать сюда']) : '#'; },
+    /* The card's main action names its channel: «Написать в WhatsApp», «Позвонить». */
+    get writeKind() { return this.card ? this.channelKind(this.card.row['Канал']) : 'phone'; },
+    get writeLabel() {
+      return { wa: 'Написать в WhatsApp', tg: 'Написать в Telegram', vk: 'Написать во ВКонтакте' }[this.writeKind] || 'Позвонить';
+    },
     contactHref(kind, value) {
       if (/^https?:\/\//.test(value)) return value;
       if (kind === 'Email' || value.includes('@')) return `mailto:${value}`;

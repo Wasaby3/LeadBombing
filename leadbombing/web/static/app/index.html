@@ -504,12 +504,14 @@
     <template x-if="card">
       <div class="card-body">
         <div class="hero" :style="heroStyle">
-          <button class="close" @click="closeCard()" aria-label="Закрыть">✕</button>
-          <button class="close fold-all" @click="toggleSections()"
+          <button type="button" class="close" @click="closeCard()" aria-label="Закрыть карточку" title="Закрыть карточку">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#x"/></svg>
+          </button>
+          <button type="button" class="close fold-all" @click="toggleSections()"
                   :aria-label="allCollapsed ? 'Развернуть все разделы' : 'Свернуть все разделы'"
                   :title="allCollapsed ? 'Развернуть все разделы' : 'Свернуть все разделы'">
-            <svg x-show="!allCollapsed" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l5 5 5-5M7 20l5-5 5 5"/></svg>
-            <svg x-show="allCollapsed" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></svg>
+            <svg class="icon" aria-hidden="true" x-show="!allCollapsed"><use href="/static/app/vendor/icons.svg#chevrons-down-up"/></svg>
+            <svg class="icon" aria-hidden="true" x-show="allCollapsed"><use href="/static/app/vendor/icons.svg#chevrons-up-down"/></svg>
           </button>
           <div class="hero-text">
             <h2 id="card-title" x-text="cardName"></h2>
@@ -518,9 +520,116 @@
         </div>
 
         <div class="actions">
-          <a class="btn primary" :href="writeHref" target="_blank" rel="noopener" x-text="'Написать: ' + card.row['Канал']"></a>
-          <button class="btn" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">Копировать сообщение</button>
-          <a class="btn ghost" :href="card.lead.source" target="_blank" rel="noopener">2ГИС ↗</a>
+          <a class="btn primary" :href="writeHref" :target="writeHref.startsWith('http') ? '_blank' : null" rel="noopener">
+            <svg class="icon" aria-hidden="true" x-show="writeKind !== 'phone'"><use href="/static/app/vendor/icons.svg#send"/></svg>
+            <svg class="icon" aria-hidden="true" x-show="writeKind === 'phone'"><use href="/static/app/vendor/icons.svg#phone"/></svg>
+            <span x-text="writeLabel"></span>
+          </a>
+          <button type="button" class="btn" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#copy"/></svg>
+            <span>Копировать сообщение</span>
+          </button>
+          <a class="btn ghost" :href="card.lead.source" target="_blank" rel="noopener">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#external-link"/></svg>
+            <span>Открыть в 2ГИС</span>
+          </a>
+          <p class="actions-note muted small" x-text="'Канал: ' + card.row['Канал'] + ' · ' + card.row['Писать сюда']"></p>
+        </div>
+
+        <!-- Работа с клиентом, first in the card: message and hook; on «Лиды» also status, priority, comment, demo app, contacted -->
+        <div class="block">
+          <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('work')" @click="toggleSection('work')"><span class="chev" aria-hidden="true"></span>Работа с клиентом</button></h3>
+          <div class="sec-body" x-show="isOpen('work')">
+            <template x-if="onLeads && crm">
+              <div class="work-head">
+                <div class="sub-label">Статус</div>
+                <div class="status-pick" role="radiogroup" aria-label="Статус лида">
+                  <template x-for="s in statuses" :key="s.id">
+                    <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
+                            :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
+                      <span class="dot"></span><span x-text="s.title"></span></button>
+                  </template>
+                </div>
+                <p class="muted small" x-text="crm.status === 'new' ? 'Статус не выставлен — лид новый' : 'Повторный клик по статусу снимает его'"></p>
+                <div class="sub-label">Приоритет</div>
+                <div class="segmented" role="radiogroup" aria-label="Приоритет лида">
+                  <template x-for="pr in priorities" :key="pr.id">
+                    <button type="button" role="radio" :class="{ on: crm.priority === pr.id }" :aria-checked="crm.priority === pr.id"
+                            :disabled="crmBusy" @click="setPriority(pr.id)" x-text="pr.title"></button>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <template x-if="onLeads && crm">
+              <div class="sub-sec">
+                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('comment')" @click="toggleSection('comment')"><span class="chev" aria-hidden="true"></span>Комментарий</button></h4>
+                <div class="sec-body" x-show="isOpen('comment')">
+                  <textarea class="comment-field" name="comment" rows="4" x-model="draft.comment" maxlength="5000"
+                            placeholder="Что обсудили, когда перезвонить…" aria-label="Комментарий"></textarea>
+                  <div class="row">
+                    <span class="muted small" x-text="draft.comment.length + ' / 5000'"></span>
+                    <button type="button" class="btn" :disabled="!commentChanged || crmBusy" @click="saveComment()">Сохранить комментарий</button>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <div class="sub-sec">
+              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('message')" @click="toggleSection('message')"><span class="chev" aria-hidden="true"></span>Сообщение</button></h4>
+              <p class="message sec-body" x-show="isOpen('message')" x-text="card.row['Сообщение']"></p>
+            </div>
+
+            <div class="sub-sec">
+              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('hook')" @click="toggleSection('hook')"><span class="chev" aria-hidden="true"></span>Крючок</button></h4>
+              <p class="sec-body" x-show="isOpen('hook')" x-text="card.row['Крючок']"></p>
+            </div>
+
+            <template x-if="onLeads && crm">
+              <div class="sub-sec">
+                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('demo')" @click="toggleSection('demo')"><span class="chev" aria-hidden="true"></span>Демо-приложение</button></h4>
+                <div class="sec-body" x-show="isOpen('demo')">
+                  <div class="path-row">
+                    <input type="url" name="demo-url" x-model="draft.demoUrl" placeholder="https://…" maxlength="2000" spellcheck="false"
+                           autocomplete="off" aria-label="Ссылка на демо-приложение" :aria-invalid="!demoUrlValid"
+                           aria-describedby="demo-error" @keydown.enter="demoChanged && demoUrlValid && saveDemo()">
+                    <button type="button" class="btn" :disabled="!demoChanged || !demoUrlValid || crmBusy" @click="saveDemo()">Сохранить ссылку</button>
+                  </div>
+                  <p class="field-error" id="demo-error" role="alert" x-show="!demoUrlValid">Ссылка должна начинаться с http:// или https://</p>
+                  <div class="demo-saved" x-show="crm.demo_url">
+                    <a class="btn ghost" :href="crm.demo_url" target="_blank" rel="noopener">
+                      <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#external-link"/></svg>
+                      <span>Открыть демо</span>
+                    </a>
+                    <button type="button" class="btn ghost" @click="copy(crm.demo_url, 'Ссылка скопирована')">
+                      <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#copy"/></svg>
+                      <span>Копировать ссылку</span>
+                    </button>
+                    <span class="muted small" x-text="crm.demo_source === 'auto' ? 'загружено автоматически' : 'вписано вручную'"></span>
+                  </div>
+                  <p class="muted small" x-show="!crm.demo_url">Ссылка на демо-приложение, которое мы предлагаем этому лиду</p>
+                </div>
+              </div>
+            </template>
+
+            <template x-if="onLeads && crm">
+              <div class="sub-sec">
+                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('channels')" @click="toggleSection('channels')"><span class="chev" aria-hidden="true"></span>Уже связались</button> <span class="count" x-text="crm.contacted.length || ''"></span></h4>
+                <div class="sec-body" x-show="isOpen('channels')">
+                  <p class="muted small">Отметьте, по каким контактам уже связывались</p>
+                  <ul class="contacted">
+                    <template x-for="c in cardContacts" :key="c.title + c.value">
+                      <li><label class="check">
+                        <input type="checkbox" :checked="isContacted(c)" :disabled="crmBusy" @change="toggleContacted(c)">
+                        <span class="contact-type" x-text="c.title"></span><span x-text="c.value"></span>
+                      </label></li>
+                    </template>
+                  </ul>
+                  <p class="muted" x-show="!cardContacts.length">В карточке 2ГИС нет контактов</p>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
 
         <div class="block">
@@ -573,95 +682,6 @@
           </dl>
         </div>
 
-        <!-- Работа с клиентом: message and hook; on «Лиды» also status, priority, channels, demo app and comment -->
-        <div class="block">
-          <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('work')" @click="toggleSection('work')"><span class="chev" aria-hidden="true"></span>Работа с клиентом</button></h3>
-          <div class="sec-body" x-show="isOpen('work')">
-            <template x-if="onLeads && crm">
-              <div class="work-head">
-                <div class="sub-label">Статус</div>
-                <div class="status-pick" role="radiogroup" aria-label="Статус лида">
-                  <template x-for="s in statuses" :key="s.id">
-                    <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
-                            :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
-                      <span class="dot"></span><span x-text="s.title"></span></button>
-                  </template>
-                </div>
-                <p class="muted small" x-text="crm.status === 'new' ? 'Статус не выставлен — лид новый' : 'Повторный клик по статусу снимает его'"></p>
-                <div class="sub-label">Приоритет</div>
-                <div class="segmented" role="radiogroup" aria-label="Приоритет лида">
-                  <template x-for="pr in priorities" :key="pr.id">
-                    <button type="button" role="radio" :class="{ on: crm.priority === pr.id }" :aria-checked="crm.priority === pr.id"
-                            :disabled="crmBusy" @click="setPriority(pr.id)" x-text="pr.title"></button>
-                  </template>
-                </div>
-              </div>
-            </template>
-
-            <template x-if="onLeads && crm">
-              <div class="sub-sec">
-                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('channels')" @click="toggleSection('channels')"><span class="chev" aria-hidden="true"></span>Канал связи</button> <span class="count" x-text="crm.contacted.length || ''"></span></h4>
-                <div class="sec-body" x-show="isOpen('channels')">
-                  <p class="muted small">Отметьте, по каким контактам уже связывались</p>
-                  <ul class="contacted">
-                    <template x-for="c in cardContacts" :key="c.title + c.value">
-                      <li><label class="check">
-                        <input type="checkbox" :checked="isContacted(c)" :disabled="crmBusy" @change="toggleContacted(c)">
-                        <span class="contact-type" x-text="c.title"></span><span x-text="c.value"></span>
-                      </label></li>
-                    </template>
-                  </ul>
-                  <p class="muted" x-show="!cardContacts.length">В карточке 2ГИС нет контактов</p>
-                </div>
-              </div>
-            </template>
-
-            <template x-if="onLeads && crm">
-              <div class="sub-sec">
-                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('demo')" @click="toggleSection('demo')"><span class="chev" aria-hidden="true"></span>Демо-приложение</button></h4>
-                <div class="sec-body" x-show="isOpen('demo')">
-                  <div class="path-row">
-                    <input type="url" x-model="draft.demoUrl" placeholder="https://…" maxlength="2000" spellcheck="false"
-                           aria-label="Ссылка на демо-приложение" @keydown.enter="demoChanged && demoUrlValid && saveDemo()">
-                    <button class="btn" :disabled="!demoChanged || !demoUrlValid || crmBusy" @click="saveDemo()">Сохранить</button>
-                  </div>
-                  <p class="field-error" x-show="!demoUrlValid">Ссылка должна начинаться с http:// или https://</p>
-                  <div class="demo-saved" x-show="crm.demo_url">
-                    <a class="btn ghost" :href="crm.demo_url" target="_blank" rel="noopener">Открыть ↗</a>
-                    <button class="btn ghost" @click="copy(crm.demo_url, 'Ссылка скопирована')">Копировать</button>
-                    <span class="muted small" x-text="crm.demo_source === 'auto' ? 'загружено автоматически' : 'вписано вручную'"></span>
-                  </div>
-                  <p class="muted small" x-show="!crm.demo_url">Ссылка на демо-приложение, которое мы предлагаем этому лиду</p>
-                </div>
-              </div>
-            </template>
-
-            <div class="sub-sec">
-              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('message')" @click="toggleSection('message')"><span class="chev" aria-hidden="true"></span>Сообщение</button> <button class="link" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">копировать</button></h4>
-              <p class="message sec-body" x-show="isOpen('message')" x-text="card.row['Сообщение']"></p>
-            </div>
-
-            <div class="sub-sec">
-              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('hook')" @click="toggleSection('hook')"><span class="chev" aria-hidden="true"></span>Крючок</button></h4>
-              <p class="sec-body" x-show="isOpen('hook')" x-text="card.row['Крючок']"></p>
-            </div>
-
-            <template x-if="onLeads && crm">
-              <div class="sub-sec">
-                <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('comment')" @click="toggleSection('comment')"><span class="chev" aria-hidden="true"></span>Комментарий</button></h4>
-                <div class="sec-body" x-show="isOpen('comment')">
-                  <textarea class="comment-field" rows="4" x-model="draft.comment" maxlength="5000"
-                            placeholder="Что обсудили, когда перезвонить…" aria-label="Комментарий"></textarea>
-                  <div class="row">
-                    <span class="muted small" x-text="draft.comment.length + ' / 5000'"></span>
-                    <button class="btn primary" :disabled="!commentChanged || crmBusy" @click="saveComment()">Сохранить</button>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-
         <details class="block">
           <summary>Что взято по умолчанию (<span x-text="card.lead.assumed.length"></span>)</summary>
           <ul class="assumed"><template x-for="a in card.lead.assumed"><li x-text="a"></li></template></ul>
@@ -670,7 +690,10 @@
         <p class="muted small">Папка в выгрузке: <code x-text="card.lead.folder"></code></p>
 
         <div class="block delete-zone" x-show="onLeads">
-          <button class="btn danger-ghost" @click="deleteOpen = true">Удалить лид</button>
+          <button type="button" class="btn danger-ghost" @click="deleteOpen = true">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#trash-2"/></svg>
+            <span>Удалить лид</span>
+          </button>
         </div>
       </div>
     </template>

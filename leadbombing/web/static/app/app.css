@@ -417,8 +417,9 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .sub-sec h4 .count { color: var(--muted); font-weight: 600; }
 .sub-sec h4 .link { font-size: 12.5px; }
 .sub-sec .sec-btn:hover { color: var(--accent); }
-.close.fold-all { right: 54px; display: grid; place-items: center; }
-.close.fold-all svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.close { display: grid; place-items: center; }
+.close.fold-all { right: 54px; }
+.actions-note { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
 .scrim.over-card { z-index: 22; }
 .modal.over-card { z-index: 23; }
 
