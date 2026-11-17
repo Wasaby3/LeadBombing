@@ -120,11 +120,9 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .grow { flex: 1; min-width: 0; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .segmented { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border-radius: 10px; }
-.segmented button { height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: none; cursor: pointer;
+.segmented button { height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: none; cursor: pointer; white-space: nowrap;
   color: var(--muted); font-weight: 550; transition: background .15s, color .15s; }
 .segmented button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
-.soon { font-size: 11px; font-weight: 550; padding: 1px 8px; border-radius: 999px; color: var(--muted); background: var(--surface-2); }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field input:disabled { opacity: .6; cursor: not-allowed; }
 .panel > .btn { align-self: flex-start; }
 
@@ -347,7 +345,8 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .modal > .field { margin-bottom: 5px; }
 .modal p { margin: 0 0 16px; }
 .modal .save-target { margin-top: 14px; }
-.path-row { display: flex; gap: 8px; }
+.path-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.path-row input { flex: 1 1 220px; min-width: 0; }
 .path-row input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
@@ -443,7 +442,7 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .nav-item { min-width: 0; padding: 0 2px; }
   .nav-full { display: none; }
   .nav-short { display: inline; }
-  .form-grid { grid-template-columns: 1fr; }
+  .panel .row { flex-wrap: wrap; }
   .toast { bottom: 84px; }
   .bar { flex-wrap: wrap; }
   .field.grow { flex-basis: 100%; }
