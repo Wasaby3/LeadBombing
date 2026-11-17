@@ -68,7 +68,12 @@
 [x-cloak] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
 /* Focus scrolled into view stays clear of the sticky page header (and of the bottom menu on phones) */
-html { scroll-padding-top: 80px; }
+html { scroll-padding-top: 80px; -webkit-tap-highlight-color: color-mix(in srgb, var(--accent) 14%, transparent); }
+button, a, label, input, select, summary { touch-action: manipulation; }
+.skip-link { position: fixed; left: 12px; top: -48px; z-index: 40; padding: 8px 14px; border-radius: 9px;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg); text-decoration: none; font-weight: 550; }
+.skip-link:focus { top: 12px; }
+.main:focus { outline: none; }
 body {
   font: 14px/1.45 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -213,7 +218,9 @@ th.pick, td.pick { width: 1%; padding-right: 0; }
   margin-bottom: 10px; min-height: 36px; }
 .counters { display: flex; align-items: center; gap: 16px; color: var(--muted); min-width: 0; }
 .counters b { color: var(--text); font-variant-numeric: tabular-nums; }
-.toggle-skipped { display: inline-flex; align-items: center; gap: 4px; }
+.counters > span:first-child { white-space: nowrap; }
+.toggle-skipped, .undo-link { display: inline-flex; align-items: center; gap: 4px; }
+.undo-link .icon { width: 14px; height: 14px; }
 .toggle-skipped b { color: inherit; }
 .toggle-skipped .icon { width: 14px; height: 14px; transition: transform .15s; }
 .toggle-skipped[aria-expanded="true"] .icon { transform: rotate(180deg); }
@@ -375,7 +382,7 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .prio.p0 { opacity: .6; }
 .sort-btn { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
 .sort-btn:hover { color: var(--text); }
-.sort-btn { display: inline-flex; align-items: center; gap: 4px; }
+.sort-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
 .sort-mark { width: 13px; height: 13px; color: var(--accent); }
 
 .sub-label { font-size: 11.5px; color: var(--muted); font-weight: 500; margin: 2px 0 6px; }
@@ -451,6 +458,8 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .subbar { flex-direction: column; }
   .col-extra { display: none; }
   /* Phone: filter and «Ещё» on the first row, the two actions share the second */
+  .counters { flex-wrap: wrap; gap: 4px 16px; }
+  .counters > .muted { flex-basis: 100%; order: 3; font-size: 12.5px; }
   .results-actions { width: 100%; margin-left: 0; display: grid; gap: 8px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; grid-template-areas: "filter filter more" "save export export"; }
   .results-actions .filter { grid-area: filter; width: 100%; }
@@ -462,4 +471,12 @@ details.block summary { cursor: pointer; color: var(--muted); }
   .name { min-width: 150px; }
   .subbar .toggle { margin-left: 0; }
   .log { white-space: normal; }
+}
+
+/* Reduced motion: state still changes, only the movement goes (the running dot stays lit, the card just appears) */
+@media (prefers-reduced-motion: reduce) {
+  .run-bar.running .dot { animation: none; }
+  .slide-in, .slide-out { animation: none; }
+  .btn:active:not(:disabled) { transform: none; }
+  .toggle-skipped .icon, .chev { transition: none; }
 }

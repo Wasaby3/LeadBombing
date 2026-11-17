@@ -15,6 +15,7 @@
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Перейти к содержимому</a>
 <div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
      @lb-logout.window="onLoggedOut()">
 
@@ -83,14 +84,14 @@
     </div>
   </nav>
 
-  <main class="main">
+  <main class="main" id="main" tabindex="-1">
   <div x-show="page === 'search'">
   <header class="top">
     <h1 class="top-title">Поиск лидов</h1>
   </header>
 
   <section class="search" aria-label="Параметры поиска">
-    <div class="spheres" role="radiogroup" aria-label="Сфера">
+    <div class="spheres" role="radiogroup" aria-label="Сфера" @keydown="radioKeys($event)">
       <template x-for="s in sphereChoices" :key="s.id">
         <button type="button" role="radio" class="chip" :class="{ on: form.sphere === s.id }" :aria-checked="form.sphere === s.id"
                 :disabled="running" @click="pickSphere(s)" x-text="s.title"></button>
@@ -138,8 +139,10 @@
     <div class="subbar">
       <span class="note" x-text="sphere?.note"></span>
       <span class="note" x-show="formChanged && !running" aria-live="polite">
-        Изменения не применены — нажмите «<span x-text="searchLabel"></span>» или
-        <button type="button" class="link" @click="restoreForm()">отмените их</button>
+        Изменения не применены — они вступят в силу по «<span x-text="searchLabel"></span>».
+        <button type="button" class="link undo-link" @click="restoreForm()">
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#undo-2"/></svg>Отменить изменения
+        </button>
       </span>
       <label class="toggle"><input type="checkbox" x-model="form.showChrome" :disabled="running"> Показывать окно Chrome</label>
     </div>
@@ -150,7 +153,7 @@
   <header class="top">
     <h1 class="top-title">Сохранённые лиды</h1>
   </header>
-  <div class="spheres" role="radiogroup" aria-label="Папки" x-show="folders.length">
+  <div class="spheres" role="radiogroup" aria-label="Папки" x-show="folders.length" @keydown="radioKeys($event)">
     <template x-for="f in folders" :key="f.id">
       <button type="button" role="radio" class="chip" :class="{ on: folderId === f.id }" :aria-checked="folderId === f.id"
               @click="showFolder(f.id)"><span x-text="f.name"></span> <span class="muted" x-text="f.count"></span></button>
@@ -223,9 +226,9 @@
     <div class="table-wrap" x-show="list.length">
       <table>
         <thead>
-          <tr><th class="pick"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
+          <tr><th class="pick"><label class="pick-hit"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
                                     :indeterminate="picked.length > 0 && !allVisiblePicked"
-                                    @change="toggleAll($event.target.checked)"></th>
+                                    @change="toggleAll($event.target.checked)"></label></th>
               <th class="num col-extra">#</th><th>Название</th>
               <th x-show="onLeads">Статус</th>
               <th x-show="onLeads" :aria-sort="{ desc: 'descending', asc: 'ascending' }[prioritySort] || 'none'">
@@ -244,7 +247,7 @@
               <td>
                 <div class="name">
                   <span class="thumb" :class="{ empty: !l.has_photo }">
-                    <img x-show="l.has_photo" :src="`${itemUrl(l.slug)}/hero`" loading="lazy" alt=""
+                    <img x-show="l.has_photo" :src="`${itemUrl(l.slug)}/hero`" loading="lazy" alt="" width="34" height="34"
                          @error="$el.remove()">
                     <span x-show="!l.has_photo" x-text="initials(l.name)"></span>
                   </span>
@@ -304,7 +307,7 @@
       <h2>Оформление</h2>
       <div class="row">
         <span>Тема</span>
-        <div class="segmented" role="radiogroup" aria-label="Тема">
+        <div class="segmented" role="radiogroup" aria-label="Тема" @keydown="radioKeys($event)">
           <template x-for="t in themeChoices" :key="t.id">
             <button type="button" role="radio" :aria-checked="theme === t.id" :class="{ on: theme === t.id }"
                     @click="setTheme(t.id)" x-text="t.title"></button>
@@ -367,7 +370,7 @@
       <p>Форма поиска (сфера, запрос, города, лимит, окно Chrome) всегда показывает последний запущенный поиск — тот,
         к которому относится таблица. Если поменять форму и не нажать «Найти лиды», под формой появится подсказка, а
         после перехода на другую страницу, перезагрузки или перезапуска приложения форма вернётся к последнему поиску.
-        Ссылка «отмените их» в подсказке откатывает изменения сразу.</p>
+        Кнопка «Отменить изменения» в подсказке откатывает их сразу.</p>
     </article>
 
     <article class="panel" id="docs-filter">
@@ -551,7 +554,7 @@
             <template x-if="onLeads && crm">
               <div class="work-head">
                 <div class="sub-label">Статус</div>
-                <div class="status-pick" role="radiogroup" aria-label="Статус лида">
+                <div class="status-pick" role="radiogroup" aria-label="Статус лида" @keydown="radioKeys($event)">
                   <template x-for="s in statuses" :key="s.id">
                     <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
                             :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
@@ -560,7 +563,7 @@
                 </div>
                 <p class="muted small" x-text="crm.status === 'new' ? 'Статус не выставлен — лид новый' : 'Повторный клик по статусу снимает его'"></p>
                 <div class="sub-label">Приоритет</div>
-                <div class="segmented" role="radiogroup" aria-label="Приоритет лида">
+                <div class="segmented" role="radiogroup" aria-label="Приоритет лида" @keydown="radioKeys($event)">
                   <template x-for="pr in priorities" :key="pr.id">
                     <button type="button" role="radio" :class="{ on: crm.priority === pr.id }" :aria-checked="crm.priority === pr.id"
                             :disabled="crmBusy" @click="setPriority(pr.id)" x-text="pr.title"></button>
@@ -648,7 +651,7 @@
                 <li class="contact" :class="{ owner: c.role === 'owner' }">
                   <span class="contact-type" x-text="c.title"></span>
                   <div class="contact-main">
-                    <a x-show="c.href" :href="c.href" target="_blank" rel="noopener" x-text="c.value"></a>
+                    <a x-show="c.href" :href="c.href" :target="/^https?:/.test(c.href || '') ? '_blank' : null" rel="noopener" x-text="c.value"></a>
                     <span x-show="!c.href" x-text="c.value"></span>
                     <div class="contact-label" x-show="c.label || c.role === 'owner'" :title="labelHint(c)">
                       <span class="owner-badge" x-show="c.role === 'owner'"><svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></svg>Руководитель</span>
@@ -675,7 +678,7 @@
               </template>
             </ul>
             <p class="muted" x-show="!cardPrices.length">Во вкладке цен 2ГИС пусто — в выгрузке будет заглушка.</p>
-            <p class="muted small" x-show="card.lead.prices_updated" x-text="'Цены обновлены в 2ГИС: ' + card.lead.prices_updated"></p>
+            <p class="muted small" x-show="card.lead.prices_updated" x-text="'Цены обновлены в 2ГИС: ' + formatDate(card.lead.prices_updated)"></p>
           </div>
         </div>
 
@@ -774,7 +777,7 @@
     <p class="muted"><span x-text="picked.length ? 'Выбранные лиды' : 'Все найденные лиды'"></span>:
       <b x-text="exportCount + ' ' + leadsWord(exportCount)"></b>. Карточки и фото останутся в разделе «Лиды» — там с ними
       можно работать и выгрузить их позже.</p>
-    <div class="segmented" role="radiogroup" aria-label="Куда сохранить">
+    <div class="segmented" role="radiogroup" aria-label="Куда сохранить" @keydown="radioKeys($event)">
       <button type="button" role="radio" :aria-checked="saveForm.mode === 'new'" :class="{ on: saveForm.mode === 'new' }"
               @click="saveForm.mode = 'new'">Новая папка</button>
       <button type="button" role="radio" :aria-checked="saveForm.mode === 'add'" :class="{ on: saveForm.mode === 'add' }"

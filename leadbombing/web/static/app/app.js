@@ -33,6 +33,8 @@ function plural(n, [one, few, many]) {
   return many;
 }
 const LEAD_WORDS = ['лид', 'лида', 'лидов'];
+const DATE_FORMAT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)');
 
 /* Windows (lead card, dialogs): focus moves in on open, Tab stays inside, focus goes back on close. */
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), '
@@ -574,7 +576,26 @@ document.addEventListener('alpine:init', () => {
     },
 
     appear(el) {
-      if (window.Motion) Motion.animate(el, { opacity: [0, 1], transform: ['translateY(6px)', 'none'] }, { duration: 0.35 });
+      if (window.Motion && !REDUCED_MOTION.matches) {
+        Motion.animate(el, { opacity: [0, 1], transform: ['translateY(6px)', 'none'] }, { duration: 0.35 });
+      }
+    },
+    /* 2GIS gives ISO dates (2025-01-21): show them the Russian way; anything else stays as it came. */
+    formatDate(value) {
+      const date = /^\d{4}-\d{2}-\d{2}/.test(value || '') ? new Date(value) : null;
+      return date && !Number.isNaN(date.getTime()) ? DATE_FORMAT.format(date) : value;
+    },
+    /* Radiogroups (spheres, folders, theme, status, priority): arrow keys pick the next or previous choice. */
+    radioKeys(e) {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!step) return;
+      const radios = [...e.currentTarget.querySelectorAll('[role=radio]:not([disabled])')];
+      const at = radios.indexOf(document.activeElement);
+      if (at < 0) return;
+      e.preventDefault();
+      const next = radios[(at + step + radios.length) % radios.length];
+      next.focus();
+      next.click();
     },
 
     async openCard(slug) {
