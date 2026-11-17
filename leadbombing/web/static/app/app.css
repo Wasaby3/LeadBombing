@@ -5,10 +5,15 @@
   --line: #e4e4e8;
   --text: #17171c;
   --muted: #6b6b76;
-  --accent: #5b5bd6;
+  --accent: #5656d0;
   --accent-hover: #4b4bc4;
   --on-accent: #ffffff;
-  --danger: #d93f3f;
+  /* Fills under white text (primary and danger buttons): ≥ 4.5:1 in both themes */
+  --accent-fill: var(--accent);
+  --accent-fill-hover: var(--accent-hover);
+  --danger: #c93434;
+  --danger-fill: #c93434;
+  --on-danger: #ffffff;
   --ok: #1f9d55;
   --wa: #1fa855;
   --tg: #2a9bd8;
@@ -35,6 +40,9 @@
     --muted: #8e8e99;
     --accent: #7c7cf0;
     --accent-hover: #8d8df5;
+    --accent-fill: #5b5bd6;
+    --accent-fill-hover: #6262de;
+    --danger: #f06060;
     --owner: #e3b341;
     --st-client: #3fbf74;
     --st-lost: #f06060;
@@ -54,6 +62,9 @@
   --muted: #8e8e99;
   --accent: #7c7cf0;
   --accent-hover: #8d8df5;
+  --accent-fill: #5b5bd6;
+  --accent-fill-hover: #6262de;
+  --danger: #f06060;
   --owner: #e3b341;
   --st-client: #3fbf74;
   --st-lost: #f06060;
@@ -145,9 +156,9 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .btn:hover:not(:disabled) { background: var(--surface-2); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
-.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
+.btn.danger { background: var(--danger-fill); border-color: var(--danger-fill); color: var(--on-danger); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover:not(:disabled) { color: var(--text); background: var(--surface-2); }
 .badge { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .22); font-variant-numeric: tabular-nums; }
