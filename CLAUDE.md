@@ -47,14 +47,18 @@ npx supabase@3.1.0 db reset                      # re-create the DB: migrations 
 Writers get catalog-item documents through `writer.write(doc)`. `writer/factory.get_writer` returns CSV/XLSX/JSON/HTML writers (optionally wrapped in `FilterWriter`), or `LeadsWriter` for `-f leads`.
 
 ### Leads mode (`leads/`)
-- `leads/writer.py` `LeadsWriter`: the output path is a folder, not a file. It dedups by 2GIS firm id and by (name, address). It applies `sphere.filter_reason`, fetches prices through `fetch_state` (which `MainParser` injects), downloads `hero.jpg` (a 403/429 here also aborts the run), and calls `sphere.build`. It merges with an existing `leads.json`/`outreach.csv` and never overwrites the hand-filled `Статус` / `Руководитель`. It emits `lead`/`skip` events through `on_event` and keeps every accepted firm in `raw` so the web app can replay it into another folder with `add()`.
+- `leads/writer.py` `LeadsWriter`: the output path is a folder, not a file. It dedups by 2GIS firm id and by (name, address). It applies `sphere.filter_reason`, fetches prices through `fetch_state` (which `MainParser` injects), downloads `hero.jpg` (a 403/429 here also aborts the run), and calls `sphere.build`. It merges with an existing `leads.json`/`outreach.csv` and never overwrites the hand-filled `Статус` / `Руководитель`. It emits `lead`/`skip` events through `on_event` (a `lead` event also carries `card_details`: `contacts` and `legal`, card-only, never exported; the web app keeps `CARD_KEYS` of it as the lead card) and keeps every accepted firm in `raw` so the web app can replay it into another folder with `add()`.
 - `leads/spheres.py` handles sphere selection:
   - `BaniSphere`: the original bathhouse template. Moscow only, `BANI_COLUMNS` (`Баня`, `Залы`), builds with `leads/build.py`. Its output must stay byte-identical; `tests/test_leads_golden.py` checks it against `tests/fixtures/bani_golden/`.
   - `TemplateSphere` + `Template` entries in `TEMPLATES` (auto, beauty, dental): multi-city, builds with `leads/generic.py` using `generic.COLUMNS` (`Название`, `Услуги`, `services` instead of `halls`). To add a sphere, add a `Template`.
   - `custom`: free search. The user's query is used as-is, there's no rubric filter, and the output format matches the templates.
 - Shared by both builders (put new cross-sphere code here, not in `build.py`):
   - `firm.py`: reads profile facts (id, short name, district, photo, legal name).
-  - `contacts.py`: `contacts_of`, `pick_channel`, `Reach` and the outreach/lead/business contact blocks.
+  - `contacts.py`: `contact_book` (every 2GIS contact with its label and role: owner/general/booking/department; the
+    lead card shows it), `contacts_of`, `reach_of` (channel by role: owner first, then general, booking, other
+    departments; `public_*` for `business.json` never the owner's number), and the outreach/lead/business contact
+    blocks. Without labels the choice is the old channel order, so goldens don't change.
+  - `firm.py` also has `owner_of_ip` (owner's full name from «ИП …»).
   - `prices.py`: the prices-tab JS, price parsing, and the «old prices» threshold.
   - `demo.py`: shared pieces of `business.json`/`leads.json` (legal, policy, theme, wordmark).
   - `text.py`: phones, transliteration, slugs.
@@ -62,7 +66,7 @@ Writers get catalog-item documents through `writer.write(doc)`. `writer/factory.
 - Dict key order is part of the output format: build `business`/`lead` dicts in their existing order.
 
 ### Web app (`web/`)
-- `server.py` `create_app(store=None, secret_key=None)`: Flask app setup and static pages only. `/search`, `/profile` and `/settings` serve the leads SPA from `web/static/app/` (`/` redirects to `/search`; `app.js` picks the page from the URL, side menu in `index.html`, theme choice in localStorage), and `/classic` serves the legacy dashboard page. Tests pass a `FakeStore` and a fixed key.
+- `server.py` `create_app(store=None, secret_key=None)`: Flask app setup and static pages only. `/search`, `/saved`, `/profile`, `/settings` and `/docs` (the in-app «Документация», same text as `docs/LOGIC.md`; keep both in sync) serve the leads SPA from `web/static/app/` (`/` redirects to `/search`; `app.js` picks the page from the URL, side menu in `index.html`, theme choice in localStorage), and `/classic` serves the legacy dashboard page. Tests pass a `FakeStore` and a fixed key.
 - Accounts (Supabase):
   - `supabase.py` `SupabaseStore`: thin `requests` client. Password login via Auth, account tables via PostgREST with the user's JWT, so RLS limits every row to its owner. Errors are `StoreError` / `InvalidCredentials` / `SessionExpired` with Russian messages.
   - `account.py`: `Account` keeps the access token fresh (long runs outlive the 1-hour JWT), `Accounts` maps user id → account in memory, `RunRecorder` saves a run and its leads; database errors are logged and never stop a run.

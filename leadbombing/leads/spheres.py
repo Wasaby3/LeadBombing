@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from . import build as bani_build
 from . import generic
+from .contacts import LABEL_ROOM_BOOKING, LABEL_SERVICE_BOOKING
 
 BANI_COLUMNS = ['Баня', 'Демо (slug)', 'Писать сюда', 'Канал', 'Телефон основной', 'Телефоны доп.', 'Telegram',
                 'Email', 'Руководитель', 'Юрлицо', 'Адрес', 'Залы', 'Крючок', 'Сообщение', 'Статус', '2ГИС']
@@ -52,6 +53,7 @@ class BaniSphere:
     fixed_city = 'moscow'
     columns = BANI_COLUMNS
     slug_prefix = 'banya'
+    contact_label = LABEL_ROOM_BOOKING  # default label of an unlabelled phone in the lead card
     from_prices_label = ('Залы из вкладки цен', 'заглушка «Парная»')
     cities = [MOSCOW]
 
@@ -109,6 +111,7 @@ class TemplateSphere:
     columns = generic.COLUMNS
     from_prices_label = ('Услуги из вкладки цен', 'без цен')
     fixed_city = None
+    contact_label = LABEL_SERVICE_BOOKING
 
     def __init__(self, template: Template, cities: list[dict]) -> None:
         if not cities:

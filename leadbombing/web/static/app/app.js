@@ -1,4 +1,4 @@
-/* LeadBombing PWA: login, side menu pages (search, saved, profile, settings), search form, live leads table,
+/* LeadBombing PWA: login, side menu pages (search, saved, profile, settings, docs), search form, live leads table,
    saved lead folders, lead card, export. Alpine.js + Motion. */
 const POLL_MS = 900;
 const SAVE_SETTINGS_MS = 800;
@@ -6,7 +6,7 @@ const TOAST_MS = 2600;
 const FORM_KEY = 'lb.form';
 const PATH_KEY = 'lb.exportPath';
 const THEME_KEY = 'lb.theme';
-const PAGES = ['search', 'saved', 'profile', 'settings'];
+const PAGES = ['search', 'saved', 'profile', 'settings', 'docs'];
 const CUSTOM = { id: 'custom', title: 'Свободный поиск', query: '', fixed_city: null,
   note: 'Свободный поиск: все фирмы из выдачи 2ГИС по вашему запросу, выгрузка как у шаблонов' };
 
@@ -365,8 +365,11 @@ document.addEventListener('alpine:init', () => {
       const img = this.card.business.theme?.hero ? `url(${this.itemUrl(this.selected)}/hero), ` : '';
       return `background-image: linear-gradient(180deg, transparent 35%, rgba(0,0,0,.72)), ${img}linear-gradient(135deg, ${accent}, #1d1d24)`;
     },
-    get contactRows() {
+    /* Every contact of the 2GIS card with its label, the owner's first (card.contacts). Cards saved before
+       labels existed only have the exported contacts: they are shown without labels. */
+    get cardContacts() {
       if (!this.card) return [];
+      if (this.card.contacts) return this.card.contacts;
       const c = this.card.lead.contact || {};
       const rows = [];
       if (c.whatsapp) rows.push(['WhatsApp', c.whatsapp]);
@@ -376,7 +379,19 @@ document.addEventListener('alpine:init', () => {
       if (c.email) rows.push(['Email', c.email]);
       const site = c.website || this.card.business.contacts?.website;
       if (site) rows.push(['Сайт', site]);
-      return rows;
+      return rows.map(([title, value]) => ({
+        title, value, href: this.contactHref(title, value), label: '', label_source: 'none', role: 'general' }));
+    },
+    get cardLegal() {
+      if (!this.card) return { name: '', owner: null };
+      return this.card.legal || { name: this.card.row['Юрлицо'] || '', owner: null };
+    },
+    labelHint(contact) {
+      return {
+        '2gis': 'Подпись из карточки 2ГИС',
+        phone: 'В 2ГИС так подписан телефон с тем же номером',
+        default: 'В 2ГИС подписи нет — подпись по умолчанию',
+      }[contact.label_source] || '';
     },
     get writeHref() { return this.card ? this.contactHref('', this.card.row['Писать сюда']) : '#'; },
     contactHref(kind, value) {

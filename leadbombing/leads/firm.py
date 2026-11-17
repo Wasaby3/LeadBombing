@@ -1,7 +1,10 @@
 """Facts about a firm read straight from its 2GIS profile, shared by every sphere's lead builder."""
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
+
+IP_RE = re.compile(r'^\s*(?:ИП|Индивидуальный\s+предприниматель)\s+(.+)$', re.I)
 
 
 def firm_id(item: dict) -> str:
@@ -33,3 +36,10 @@ def legal_name(item: dict, short: str) -> Optional[str]:
     org = item.get('org') or {}
     return (item.get('name_ex') or {}).get('legal_name') or \
         (org.get('name') if org.get('name') not in (short, item.get('name')) else '')
+
+
+def owner_of_ip(legal: Optional[str]) -> Optional[str]:
+    """Full name of the owner when the legal entity is a sole trader («ИП Иванов Иван Иванович»), else None."""
+    m = IP_RE.match(legal or '')
+    name = ' '.join(m.group(1).strip('«»"\' ').split()) if m else ''
+    return name or None

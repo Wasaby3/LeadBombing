@@ -6,7 +6,8 @@ import re
 from datetime import date
 from typing import Any
 
-from .contacts import Reach, business_contacts, contacts_of, lead_contact, outreach_columns, reach_of
+from .contacts import (LABEL_ROOM_BOOKING, Reach, business_contacts, contact_book, contacts_of, lead_contact,
+                       outreach_columns, reach_of)
 from .demo import (amenities_description, legal_block, photos_block, policy_block, theme_block,
                    working_hours_block, wordmark_main)
 from .firm import district_of, firm_id, legal_name, main_photo, short_name
@@ -221,7 +222,7 @@ def build(item: dict, prices: dict | None, slug: str, hero: bool, today: date) -
     updated = parse_updated((prices or {}).get('updated'))
     has_site = bool(c['website'])
     hook = make_hook(has_site, updated, len(halls), today)
-    reach = reach_of(c)
+    reach = reach_of(c, contact_book(item, LABEL_ROOM_BOOKING))
     hall_names = [h['name'] for h in halls]
     source = f'https://2gis.ru/moscow/firm/{firm_id(item)}'
 

@@ -13,16 +13,26 @@ from typing import Any, Callable, Optional
 from ..logger import logger
 from ..parser.exceptions import ParserException
 from . import firm
+from .contacts import contact_book
 from .prices import PRICES_EXPR
 from .spheres import BaniSphere
 from .text import slugify, unique
 
 KEEP = ('Статус', 'Руководитель')  # filled by hand, never overwritten
+CARD_KEYS = ('lead', 'row', 'business', 'contacts', 'legal')  # what the web app keeps of a `lead` event
 
 
 def firm_id_of(url: str) -> str:
     m = re.search(r'/firm/(\d+)', url or '')
     return m.group(1) if m else ''
+
+
+def card_details(item: dict, sphere: Any) -> dict[str, Any]:
+    """Lead card details that are not exported: every contact with its label, the legal entity, the ИП owner."""
+    short = firm.short_name(item)
+    legal = firm.legal_name(item, short) or ''
+    return {'contacts': contact_book(item, sphere.contact_label),
+            'legal': {'name': legal if legal != short else '', 'owner': firm.owner_of_ip(legal)}}
 
 
 class LeadsWriter:
@@ -159,7 +169,8 @@ class LeadsWriter:
         self._save()
         logger.info('Лид: %s → tenants/%s', short, slug)
         if self.on_event:
-            self.on_event({'type': 'lead', 'slug': slug, 'updated': bool(known), **result})
+            self.on_event({'type': 'lead', 'slug': slug, 'updated': bool(known), **result,
+                           **card_details(item, self.sphere)})
         return slug
 
     def _download_hero(self, item: dict) -> Optional[bytes]:

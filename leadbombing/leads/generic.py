@@ -7,7 +7,8 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, Optional
 
 from .build import schedule_of
-from .contacts import Reach, business_contacts, contacts_of, lead_contact, outreach_columns, reach_of
+from .contacts import (LABEL_SERVICE_BOOKING, Reach, business_contacts, contact_book, contacts_of, lead_contact,
+                       outreach_columns, reach_of)
 from .demo import (amenities_description, legal_block, photos_block, policy_block, theme_block,
                    working_hours_block, wordmark_main)
 from .firm import district_of, firm_id, legal_name, main_photo, short_name
@@ -141,7 +142,7 @@ def build_generic(item: dict, prices: Optional[dict], slug: str, hero: bool, tod
     updated = parse_updated((prices or {}).get('updated'))
     has_site = bool(c['website'])
     hook = make_hook(has_site, updated, today)
-    reach = reach_of(c)
+    reach = reach_of(c, contact_book(item, LABEL_SERVICE_BOOKING))
     names = [s['name'] for s in services]
 
     row = {'Название': short, 'Демо (slug)': slug, **outreach_columns(reach, c, legal_name(item, short), short),

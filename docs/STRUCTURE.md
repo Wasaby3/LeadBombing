@@ -11,9 +11,10 @@ leadbombing/            пакет
     writer.py             LeadsWriter: дедуп, фильтр сферы, фото, слияние с существующей папкой
     spheres.py            сферы: бани, шаблоны (авто, красота, стоматология), свободный поиск
     build.py, generic.py  сборка выгрузки для бань и для шаблонов
-    firm.py, contacts.py, prices.py, demo.py, text.py   общие части
+    contacts.py           все контакты карточки с подписями и ролями, выбор канала (руководитель первым)
+    firm.py, prices.py, demo.py, text.py   общие части (firm.py: юрлицо, владелец ИП)
   web/                  Flask-приложение
-    server.py             создание приложения и страницы (/search, /saved, /settings, /profile, /classic)
+    server.py             создание приложения и страницы (/search, /saved, /settings, /profile, /docs, /classic)
     auth.py, account*.py  вход, сессия, данные аккаунта
     supabase.py           клиент Supabase (Auth + PostgREST)
     leads_api.py, leads_job.py   поиск лидов в фоне и выгрузка
@@ -41,5 +42,6 @@ scripts/                обновление списков городов и р
 
 ## Прочее
 
+- `docs/LOGIC.md` — логика поиска, отсева и выбора контактов (то же, что страница «Документация»).
 - `CLAUDE.md` — подробные заметки об архитектуре для разработки с Claude Code.
 - `PROMPT.md` — исходный бриф продукта и его жёсткие ограничения.

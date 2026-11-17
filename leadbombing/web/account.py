@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..leads.writer import firm_id_of
+from ..leads.writer import CARD_KEYS, firm_id_of
 from ..logger import logger
 from .supabase import Session, StoreError
 
@@ -97,7 +97,7 @@ class RunRecorder:
     def lead(self, event: dict, summary: dict) -> None:
         row = {'sphere': self._sphere, 'firm_id': firm_id_of(event['lead'].get('source', '')),
                'slug': event['slug'], 'run_id': self._run_id, 'summary': summary,
-               'card': {k: event[k] for k in ('lead', 'row', 'business')}}
+               'card': {k: event[k] for k in CARD_KEYS}}
         self._safe('лид', lambda token: self._account.store.save_lead(token, row))
 
     def finished(self, status: str, accepted: int, skipped: int, error: Optional[str]) -> None:

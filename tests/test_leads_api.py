@@ -53,6 +53,7 @@ def wait_done(client):
 
 def test_run_card_and_export_match_bani_format(client, tmp_path):
     assert client.get('/search').status_code == 200 and client.get('/sw.js').status_code == 200
+    assert client.get('/docs').status_code == 200
     meta = client.get('/api/leads/meta').get_json()
     assert meta['spheres'][0]['id'] == 'bani' and meta['cities'][0]['code'] == 'moscow'
 
@@ -64,6 +65,13 @@ def test_run_card_and_export_match_bani_format(client, tmp_path):
 
     card = client.get('/api/leads/item/usadba-bannaya').get_json()
     assert card['row']['Баня'] == 'Усадьба Банная' and card['business']['halls']
+    assert [(c['title'], c['value'], c['label'], c['label_source']) for c in card['contacts']] == [
+        ('Телефон', '+7 958 775-20-88', 'для бронирования', 'default'),
+        ('Телефон', '+7 499 111-25-70', 'для бронирования', 'default'),
+        ('WhatsApp', 'https://wa.me/79587752088', 'для бронирования', 'default'),
+        ('Telegram', 'https://t.me/+79035490939', 'для бронирования', 'default'),
+        ('Email', 'info@usadba.ru', 'почта фирмы', 'default')]
+    assert card['legal'] == {'name': 'ООО Усадьба', 'owner': None}
     assert client.get('/api/leads/item/usadba-bannaya/hero').status_code == 200
     assert client.get('/api/leads/item/..%2F..%2Fetc').status_code == 404
 

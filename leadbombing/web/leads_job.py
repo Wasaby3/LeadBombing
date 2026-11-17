@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from ..config import Configuration
 from ..leads import LeadsWriter
+from ..leads.writer import CARD_KEYS
 from ..leads.spheres import get_sphere
 from ..logger import logger
 from ..parser import get_parser
@@ -95,7 +96,7 @@ class LeadsJob:
 
     def _on_event(self, event: dict) -> None:
         if event['type'] == 'lead':
-            self.results[event['slug']] = {k: event[k] for k in ('lead', 'row', 'business')}
+            self.results[event['slug']] = {k: event[k] for k in CARD_KEYS}
             summary = {'type': 'lead', **lead_summary(event)}
             self.events.append(summary)
             if self._recorder:
