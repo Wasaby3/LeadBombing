@@ -258,8 +258,8 @@
               <td class="pick" @click.stop><label class="pick-hit"><input type="checkbox" :aria-label="`Выбрать «${l.name}»`"
                                                    :checked="picked.includes(l.slug)" @change="togglePick(l.slug)"></label></td>
               <td class="num muted col-extra" x-text="i + 1"></td>
-              <td class="prio-col"><span class="prio-stars" role="img" :aria-label="priorityLabel(l.priority)"
-                                         :title="priorityLabel(l.priority)"><template x-for="n in (l.priority || 0)" :key="n"><svg class="star" aria-hidden="true"><use href="/static/app/vendor/icons.svg#star"/></svg></template></span></td>
+              <td class="prio-col"><span class="prio-mark" :class="'p-' + (l.priority || 0)" role="img" :aria-label="priorityLabel(l.priority)"
+                                         :title="priorityLabel(l.priority)"><svg class="icon" aria-hidden="true"><use :href="priorityIcon(l.priority)"/></svg></span></td>
               <td>
                 <div class="name">
                   <span class="thumb" :class="{ empty: !l.has_photo }">
@@ -496,10 +496,10 @@
     <article class="panel" id="docs-leads">
       <h2>9. Страница «Сохранённые лиды»: работа с сохранённым лидом</h2>
       <p>«Сохранить лиды» на странице поиска кладёт лиды в папку кабинета, папки видны на странице «Сохранённые лиды». В таблице
-        папки напротив каждого лида — его статус и приоритет. Приоритет — до пяти звёзд внахлёст вплотную слева от
-        фото, сколько звёзд — такой приоритет; на странице поиска там же оценка по карточке (раздел 10). Переключатель
-        «Раскрасить по приоритету» над таблицей красит строки от холодного синего (1) через зелёный и янтарный к
-        оранжевому (5), строки без приоритета не красятся. Значок сортировки над звёздами сортирует: сначала высокий,
+        папки напротив каждого лида — его статус и приоритет. Приоритет — значок слева от фото: большое пламя (5), огонь (4), солнце (3), облако (2), снежинка (1),
+        пунктирный круг (нет), цвет значка как у раскраски строки; на странице поиска там же оценка по карточке (раздел 10). Переключатель
+        «Раскрасить по приоритету» над таблицей красит строки от холодного синего (1) через фиолетовый и малиновый к
+        красному (5), цвет плавно гаснет к фото, строки без приоритета не красятся. Значок сортировки над значками сортирует: сначала высокий,
         потом низкий, третий клик возвращает порядок.</p>
       <p>Карточка лида на обеих страницах устроена одинаково: под кнопками «Написать…», «Копировать сообщение» и
         «Открыть в 2ГИС» сразу идёт «Работа с клиентом», ниже — «Контакты», «Услуги», «Юрлицо». В «Работе с клиентом»
@@ -598,7 +598,7 @@
             <template x-if="card.assessment && card.assessment.priority">
               <div class="assess">
                 <div class="sub-label">Оценка по карточке 2ГИС</div>
-                <p><span class="prio-stars" aria-hidden="true"><template x-for="n in (card.assessment.priority)" :key="n"><svg class="star" aria-hidden="true"><use href="/static/app/vendor/icons.svg#star"/></svg></template></span>
+                <p><span class="prio-mark" :class="'p-' + card.assessment.priority" aria-hidden="true"><svg class="icon" aria-hidden="true"><use :href="priorityIcon(card.assessment.priority)"/></svg></span>
                   <b x-text="priorityTitle(card.assessment.priority)"></b> · <span x-text="card.assessment.note"></span></p>
               </div>
             </template>

@@ -25,7 +25,7 @@
   --st-waiting: #a88400;
   --st-no-answer: #dd6b20;
   --prio-cold: #3b82f6;
-  --prio-hot: #e8590c;
+  --prio-hot: #e03131;
   --prio-tint: 12%;
   --shadow: 0 1px 2px rgba(16, 16, 24, .04), 0 8px 24px rgba(16, 16, 24, .06);
   --shadow-lg: 0 24px 64px rgba(16, 16, 24, .18);
@@ -52,7 +52,7 @@
     --st-waiting: #e6c33a;
     --st-no-answer: #f2913d;
     --prio-cold: #4f8ff7;
-    --prio-hot: #f2753d;
+    --prio-hot: #f25f5f;
     --prio-tint: 16%;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
     --shadow-lg: 0 24px 64px rgba(0, 0, 0, .55);
@@ -77,7 +77,7 @@
   --st-waiting: #e6c33a;
   --st-no-answer: #f2913d;
   --prio-cold: #4f8ff7;
-  --prio-hot: #f2753d;
+  --prio-hot: #f25f5f;
   --prio-tint: 16%;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
   --shadow-lg: 0 24px 64px rgba(0, 0, 0, .55);
@@ -218,7 +218,7 @@ th.pick, td.pick { width: 1%; padding-right: 0; }
   color: var(--muted); }
 .subbar .toggle { margin-left: auto; white-space: nowrap; }
 .toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.toggle input { accent-color: var(--accent); }
+.toggle input { accent-color: var(--accent); cursor: pointer; }
 
 .alert { margin-top: 14px; padding: 11px 14px; border-radius: 10px; color: var(--danger);
   background: color-mix(in srgb, var(--danger) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); }
@@ -287,11 +287,12 @@ tbody tr:hover, tbody tr.active { background: var(--surface-2); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .rating { font-weight: 600; }
 .rating::before { content: "★ "; color: #f5a524; }
-.channel { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 550; white-space: nowrap; }
-.channel::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.channel.wa::before { background: var(--wa); }
-.channel.tg::before { background: var(--tg); }
-.channel.vk::before { background: var(--vk); }
+.channel { --c: var(--muted); display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap; color: color-mix(in srgb, var(--c) 75%, var(--text));
+  background: color-mix(in srgb, var(--c) 13%, transparent); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
+.channel.wa { --c: var(--wa); }
+.channel.tg { --c: var(--tg); }
+.channel.vk { --c: var(--vk); }
 .prices { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .results > .empty { text-align: center; padding: 72px 24px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); }
@@ -396,29 +397,36 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .st.lost, .st-btn.lost { --c: var(--st-lost); }
 .st.waiting, .st-btn.waiting { --c: var(--st-waiting); }
 .st.no_answer, .st-btn.no_answer { --c: var(--st-no-answer); }
-/* Priority 0–5: as many small stars as the priority, overlapping, right before the photo (no gap to it). */
+/* Priority 0–5: one mark right before the photo (no gap to it) — big flame 5, flame 4, sun 3, cloud 2, snowflake 1,
+   dashed circle 0 — in the same heat colour as the row tint. */
 .prio-col { width: 1%; white-space: nowrap; }
 td.prio-col, th.prio-col { padding-right: 0; }
-.prio-col + td, .prio-col + th { padding-left: 6px; }
-.prio-stars { display: inline-flex; align-items: center; justify-content: flex-end; width: 46px; height: 14px; vertical-align: middle; }
-.star { width: 14px; height: 14px; flex: none; fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
-.star + .star { margin-left: -6px; }
-/* Rows coloured by priority (toggle «Раскрасить по приоритету»): a heat scale from cold blue (1) through green and
-   amber to hot orange (5), the long way round the hue circle; none for 0. */
+/* Even gaps: checkbox, number, mark and photo all ~18px apart (the mark's own side bearing makes up the rest) */
+.num:has(+ .prio-col) { padding-right: 7px; }
+.num + .prio-col { padding-left: 7px; }
+.prio-mark { display: inline-grid; place-items: center; vertical-align: middle;
+  color: color-mix(in oklch shorter hue, var(--prio-hot) var(--heat), var(--prio-cold)); }
+.prio-mark.p-0 { color: var(--muted); }
+.prio-mark .icon { width: 17px; height: 17px; }
+/* Rows coloured by priority (toggle «Раскрасить по приоритету»): a smooth heat scale from cold blue (1) to hot
+   red (5), the short way round the hue circle; the colour fades from the left edge to nothing before the photo;
+   none for 0. */
+table { --prio-fade: 100px; }
 tbody tr[class*="tint-"] {
-  --tint: color-mix(in srgb, color-mix(in oklch longer hue, var(--prio-hot) var(--heat), var(--prio-cold)) var(--prio-tint), transparent);
-  background: var(--tint);
+  --tint: color-mix(in srgb, color-mix(in oklch shorter hue, var(--prio-hot) var(--heat), var(--prio-cold)) var(--prio-tint), transparent);
+  --fade: linear-gradient(to right, var(--tint), transparent var(--prio-fade));
+  background: var(--fade);
 }
-tbody tr.tint-1 { --heat: 0%; }
-tbody tr.tint-2 { --heat: 25%; }
-tbody tr.tint-3 { --heat: 50%; }
-tbody tr.tint-4 { --heat: 75%; }
-tbody tr.tint-5 { --heat: 100%; }
-tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: linear-gradient(var(--tint), var(--tint)), var(--surface-2); }
+tbody tr.tint-1, .prio-mark.p-1 { --heat: 0%; }
+tbody tr.tint-2, .prio-mark.p-2 { --heat: 25%; }
+tbody tr.tint-3, .prio-mark.p-3 { --heat: 50%; }
+tbody tr.tint-4, .prio-mark.p-4 { --heat: 75%; }
+tbody tr.tint-5, .prio-mark.p-5 { --heat: 100%; }
+tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: var(--fade), var(--surface-2); }
 .prio-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .assess { margin-bottom: 14px; }
 .assess p { margin: 0; }
-.assess .prio-stars { width: auto; margin-right: 6px; justify-content: flex-start; }
+.assess .prio-mark { margin-right: 4px; }
 .sort-btn { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
 .sort-btn:hover { color: var(--text); }
 .sort-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
@@ -496,6 +504,7 @@ tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: li
   .btn.go { flex-basis: 100%; }
   .subbar { flex-direction: column; }
   .col-extra { display: none; }
+  table { --prio-fade: 64px; }
   /* Phone: filter and «Ещё» on the first row, the two actions share the second */
   .counters { flex-wrap: wrap; gap: 4px 16px; }
   .counters > .muted { flex-basis: 100%; order: 3; font-size: 12.5px; }

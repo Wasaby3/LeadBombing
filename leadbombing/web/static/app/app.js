@@ -15,9 +15,10 @@ const STATUSES = [
 ];
 const NEW_STATUS = { id: 'new', title: 'Новый' };
 /* Lead priority 0–5: set by hand on «Лиды», or assessed from the 2GIS card (leads/booking.py); 5 is the hottest. */
-const PRIORITIES = [{ id: 5, short: '5', title: 'Очень высокий' }, { id: 4, short: '4', title: 'Высокий' },
-  { id: 3, short: '3', title: 'Средний' }, { id: 2, short: '2', title: 'Низкий' }, { id: 1, short: '1', title: 'Очень низкий' },
-  { id: 0, short: 'Нет', title: 'Не задан' }];
+const PRIORITIES = [{ id: 5, short: '5', title: 'Очень высокий', icon: 'flame-high' },
+  { id: 4, short: '4', title: 'Высокий', icon: 'flame' }, { id: 3, short: '3', title: 'Средний', icon: 'sun' },
+  { id: 2, short: '2', title: 'Низкий', icon: 'cloud' }, { id: 1, short: '1', title: 'Очень низкий', icon: 'snowflake' },
+  { id: 0, short: 'Нет', title: 'Не задан', icon: 'circle-dashed' }];
 const SORT_NEXT = { '': 'desc', desc: 'asc', asc: '' };  // priority column: high first, low first, folder order
 /* Lead card sections, top to bottom; «Работа с клиентом» holds the sub-sections. All open when a lead is opened. */
 const SECTIONS = ['contacts', 'prices', 'legal', 'work'];
@@ -685,6 +686,7 @@ document.addEventListener('alpine:init', () => {
     /* Work on a saved lead: status, priority, contacted channels, demo app, comment, delete. */
     statusOf(id) { return STATUSES.find((s) => s.id === id) || NEW_STATUS; },
     priorityTitle(id) { return PRIORITIES.find((p) => p.id === (id || 0))?.title || 'Не задан'; },
+    priorityIcon(id) { return `/static/app/vendor/icons.svg#${PRIORITIES.find((p) => p.id === (id || 0))?.icon || 'circle-dashed'}`; },
     priorityLabel(id) { return id ? `Приоритет: ${this.priorityTitle(id).toLowerCase()} (${id} из 5)` : 'Приоритет не задан'; },
     sortByPriority() { this.prioritySort = SORT_NEXT[this.prioritySort]; },
     get prioritySortTitle() {
