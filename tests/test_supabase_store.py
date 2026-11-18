@@ -77,7 +77,7 @@ def test_folder_round_trip(token):
     assert (folder['name'], folder['count'], len(folder['cities'])) == ('Тест', 2, 2)
     assert store.get_folder(token, folder_id)['query'] == 'бани'
     assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b', 'a']
-    assert store.folder_leads(token, folder_id) == [{'name': 'А', 'status': 'new', 'priority': 0, 'owner': ''}] * 2
+    assert store.folder_leads(token, folder_id) == [{'name': 'А', 'status': 'not_written', 'priority': 0, 'owner': ''}] * 2
     assert store.folder_card(token, folder_id, 'a')['row'] == {'Название': 'А2'}
     assert store.folder_card(token, folder_id, 'zzz') is None
 
@@ -114,17 +114,38 @@ def test_folder_lead_work_round_trip(token):
     folder_id = store.create_folder(token, {'name': 'CRM', 'sphere': SPHERE, 'query': '', 'cities': []})
     lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {}, 'prices': None}}
     store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b'}])
-    assert store.folder_card(token, folder_id, 'a')['crm']['status'] == 'new'
+    assert store.folder_card(token, folder_id, 'a')['crm']['status'] == 'not_written'
 
-    crm = store.update_folder_lead(token, folder_id, 'a', {'status': 'client', 'priority': 2, 'comment': 'да',
+    crm = store.update_folder_lead(token, folder_id, 'a', {'status': 'almost', 'priority': 2, 'comment': 'да',
                                                            'demo_url': 'https://d.example', 'demo_source': 'manual'})
-    assert (crm['status'], crm['priority'], crm['demo_source']) == ('client', 2, 'manual')
-    assert store.update_folder_lead(token, folder_id, 'zzz', {'status': 'lost'}) is None
+    assert (crm['status'], crm['priority'], crm['demo_source']) == ('almost', 2, 'manual')
+    assert store.update_folder_lead(token, folder_id, 'zzz', {'status': 'refused'}) is None
     store.add_to_folder(token, folder_id, [lead])  # re-saving keeps the work
     assert store.folder_card(token, folder_id, 'a')['crm']['comment'] == 'да'
-    assert store.folder_leads(token, folder_id)[1] == {'name': 'А', 'status': 'client', 'priority': 2, 'owner': ''}
+    assert store.folder_leads(token, folder_id)[1] == {'name': 'А', 'status': 'almost', 'priority': 2, 'owner': ''}
     assert store.update_folder_lead(token, folder_id, 'a', {'priority': 5})['priority'] == 5
 
     assert store.delete_folder_lead(token, folder_id, 'a') is True
     assert store.delete_folder_lead(token, folder_id, 'a') is False
     assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b']
+
+
+def test_client_round_trip(token):
+    folder_id = store.create_folder(token, {'name': 'Клиенты', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {}, 'prices': None}}
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b'}])
+    assert store.update_folder_lead(token, folder_id, 'a', {'client_status': 'bug'}) is None  # still a lead
+
+    crm = store.make_client(token, folder_id, 'a')
+    assert (crm['status'], crm['client_status']) == ('bought', 'ok') and crm['client_since']
+    assert store.make_client(token, folder_id, 'a') is None  # already a client
+    assert store.update_folder_lead(token, folder_id, 'a', {'client_status': 'question'})['client_status'] == 'question'
+
+    store.add_to_folder(token, folder_id, [lead])  # re-saving keeps it a client
+    assert [r['name'] for r in store.folder_leads(token, folder_id)] == ['А']
+    assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b']
+    assert [r['slug'] for r in store.folder_assess_rows(token, folder_id)] == ['b']
+    assert next(f for f in store.list_folders(token) if f['id'] == folder_id)['count'] == 1
+    mine = [c for c in store.list_clients(token) if c['folder_id'] == folder_id]
+    assert [(c['slug'], c['name'], c['folder'], c['client_status'], c['status'], c['owner']) for c in mine] == [
+        ('a', 'А', 'Клиенты', 'question', 'bought', '')]

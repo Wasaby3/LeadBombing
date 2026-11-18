@@ -61,7 +61,7 @@ def assert_golden(name: str, data: bytes) -> None:
 
 
 def test_pages_are_served(client):
-    for path in ('/search', '/leads', '/classic', '/sw.js', '/manifest.webmanifest'):
+    for path in ('/search', '/leads', '/clients', '/classic', '/sw.js', '/manifest.webmanifest'):
         assert client.get(path).status_code == 200, path
     assert client.get('/sw.js').headers['Cache-Control'] == 'no-cache'
     old = client.get('/saved')  # the page was renamed: old bookmarks still work

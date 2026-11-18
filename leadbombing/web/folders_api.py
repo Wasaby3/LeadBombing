@@ -1,5 +1,6 @@
-"""Saved leads by folders (the «Лиды» page): save the current run's leads into a folder, browse folders, export a
-folder, work on a lead (status, priority, comment, contacted channels, demo app) and delete it.
+"""Saved leads by folders (the «Сохранённые лиды» page): save the current run's leads into a folder, browse folders,
+export a folder, work on a lead or client (status, priority, comment, contacted channels, demo app) and delete it.
+Clients stay in their folder's table but are not listed, counted or exported with it (see clients_api.py).
 
 A folder lead is a snapshot (table row, card, raw firm data) in Supabase; its hero photo is on disk.
 """
@@ -79,20 +80,24 @@ def _folder_leads(job: LeadsJob, raw: list[dict]) -> list[dict]:
             for r in raw if r['slug'] in summaries and r['slug'] in job.results]
 
 
+def fail(message: str, code: int = 400) -> Any:
+    from flask import jsonify
+    return jsonify({'ok': False, 'error': message}), code
+
+
+def with_store(call: Callable[[Any, str], Any]) -> Any:
+    """Run `call(store, token)` for the current account and map database errors to responses."""
+    from flask import g
+    try:
+        return call(g.account.store, g.account.token())
+    except SessionExpired as e:
+        return fail(str(e), 401)
+    except StoreError as e:
+        return fail(str(e), 503)
+
+
 def register(app: Any, job: LeadsJob) -> None:
-    from flask import g, jsonify, request, send_file
-
-    def fail(message: str, code: int = 400):
-        return jsonify({'ok': False, 'error': message}), code
-
-    def with_store(call: Callable[[Any, str], Any]):
-        """Run `call(store, token)` for the current account and map database errors to responses."""
-        try:
-            return call(g.account.store, g.account.token())
-        except SessionExpired as e:
-            return fail(str(e), 401)
-        except StoreError as e:
-            return fail(str(e), 503)
+    from flask import jsonify, request, send_file
 
     @app.route('/api/folders')
     def folders_list():
@@ -160,7 +165,8 @@ def register(app: Any, job: LeadsJob) -> None:
 
         def update(store: Any, token: str):
             crm = store.update_folder_lead(token, folder_id, slug, fields)
-            return jsonify({'ok': True, 'crm': crm}) if crm is not None else fail('Лид не найден', 404)
+            missing = 'Клиент не найден' if 'client_status' in fields else 'Лид не найден'
+            return jsonify({'ok': True, 'crm': crm}) if crm is not None else fail(missing, 404)
         return with_store(update)
 
     @app.route('/api/folders/<int:folder_id>/item/<slug>', methods=['DELETE'])

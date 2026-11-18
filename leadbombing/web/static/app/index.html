@@ -11,6 +11,7 @@
 <link rel="icon" href="/static/app/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app/app.css">
 <script src="/static/app/vendor/motion-11.11.13.js"></script>
+<script src="/static/app/crm.js"></script>
 <script src="/static/app/app.js"></script>
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
@@ -63,7 +64,12 @@
       <a href="/leads" class="nav-item" :class="{ on: page === 'leads' }" :aria-current="page === 'leads' && 'page'"
          @click.prevent="go('leads')">
         <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#users"/></svg>
-        <span class="nav-full">Сохранённые лиды</span><span class="nav-short">Сохранённые</span>
+        <span class="nav-full">Сохранённые лиды</span><span class="nav-short">Лиды</span>
+      </a>
+      <a href="/clients" class="nav-item" :class="{ on: page === 'clients' }" :aria-current="page === 'clients' && 'page'"
+         @click.prevent="go('clients')">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#handshake"/></svg>
+        <span>Клиенты</span>
       </a>
       <a href="/settings" class="nav-item" :class="{ on: page === 'settings' }" :aria-current="page === 'settings' && 'page'"
          @click.prevent="go('settings')">
@@ -73,7 +79,7 @@
       <a href="/docs" class="nav-item" :class="{ on: page === 'docs' }" :aria-current="page === 'docs' && 'page'"
          @click.prevent="go('docs')">
         <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#book-open"/></svg>
-        <span>Документация</span>
+        <span class="nav-full">Документация</span><span class="nav-short">Справка</span>
       </a>
     </div>
     <div class="side-user">
@@ -165,8 +171,14 @@
   </div>
   </div>
 
-  <section class="results" x-show="page === 'search' || onLeads" aria-label="Результаты">
-    <div class="run-bar" x-show="!onLeads && status !== 'idle'" :class="status">
+  <div x-show="onClients">
+  <header class="top">
+    <h1 class="top-title">Клиенты</h1>
+  </header>
+  </div>
+
+  <section class="results" x-show="onSearch || onSaved" aria-label="Результаты">
+    <div class="run-bar" x-show="onSearch && status !== 'idle'" :class="status">
       <span class="dot" aria-hidden="true"></span>
       <b role="status" x-text="statusText"></b>
       <span class="muted" x-show="statusHint" x-text="statusHint"></span>
@@ -175,14 +187,14 @@
             :title="!running && !sameRun ? 'Найдено по другому запросу: форма поиска с тех пор изменена' : 'Параметры поиска этой таблицы'"
             x-text="runLabel"></span>
     </div>
-    <div class="alert" role="alert" x-show="error && !onLeads" x-transition x-text="error"></div>
+    <div class="alert" role="alert" x-show="error && onSearch" x-transition x-text="error"></div>
 
     <div class="results-head">
       <div class="counters">
-        <span><b x-text="list.length"></b> <span x-text="leadsWord(list.length)"></span></span>
-        <span class="muted" x-show="!onLeads && fromAccount">из прошлых поисков — чтобы сохранить или выгрузить, начните новый поиск</span>
+        <span><b x-text="list.length"></b> <span x-text="onClients ? clientsWord(list.length) : leadsWord(list.length)"></span></span>
+        <span class="muted" x-show="onSearch && fromAccount">из прошлых поисков — чтобы сохранить или выгрузить, начните новый поиск</span>
         <label class="toggle" x-show="list.length"><input type="checkbox" x-model="tintRows" @change="saveTint()"> Раскрасить по приоритету</label>
-        <button type="button" class="link toggle-skipped" x-show="!onLeads" @click="showSkipped = !showSkipped"
+        <button type="button" class="link toggle-skipped" x-show="onSearch" @click="showSkipped = !showSkipped"
                 :disabled="!skipped.length" :aria-expanded="showSkipped" aria-controls="skipped-list">
           Отсеяно: <b x-text="skipped.length"></b>
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#chevron-down"/></svg>
@@ -191,7 +203,7 @@
       <div class="results-actions">
         <input class="filter" type="search" placeholder="Найти по названию или району…" aria-label="Найти по названию или району"
                autocomplete="off" x-model="filter" x-show="list.length">
-        <button type="button" class="btn" x-show="!onLeads && leads.length && !fromAccount" :disabled="running" @click="openSave()"
+        <button type="button" class="btn" x-show="onSearch && leads.length && !fromAccount" :disabled="running" @click="openSave()"
                 :title="running ? 'Сохранить можно после остановки поиска' : ''">
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-plus"/></svg>
           <span>Сохранить лиды</span>
@@ -208,7 +220,7 @@
           <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить'"></span>
           <span class="badge" x-text="exportCount"></span>
         </button>
-        <div class="more" x-show="!onLeads || exportPath" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
+        <div class="more" x-show="onSearch || (onLeads && exportPath)" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
           <button type="button" class="icon-btn" x-ref="moreBtn" aria-haspopup="menu" :aria-expanded="moreOpen"
                   aria-label="Ещё действия" title="Ещё действия" @click="toggleMore()">
             <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#ellipsis"/></svg>
@@ -219,7 +231,7 @@
               <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-open"/></svg>
               <span>Открыть папку выгрузки</span>
             </button>
-            <button type="button" role="menuitem" class="menu-item danger" x-show="!onLeads" :disabled="!canClear"
+            <button type="button" role="menuitem" class="menu-item danger" x-show="onSearch" :disabled="!canClear"
                     @click="moreOpen = false; clearOpen = true">
               <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#eraser"/></svg>
               <span>Очистить поиск<small x-show="running">Сначала остановите поиск</small></span>
@@ -229,7 +241,7 @@
       </div>
     </div>
 
-    <div class="skipped" id="skipped-list" x-show="showSkipped && !onLeads" x-transition>
+    <div class="skipped" id="skipped-list" x-show="showSkipped && onSearch" x-transition>
       <template x-for="[reason, n] in skippedByReason" :key="reason">
         <span class="pill"><span x-text="reason"></span> <b x-text="n"></b></span>
       </template>
@@ -238,7 +250,7 @@
     <div class="table-wrap" x-show="list.length">
       <table>
         <thead>
-          <tr><th class="pick"><label class="pick-hit"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
+          <tr><th class="pick" x-show="!onClients"><label class="pick-hit"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
                                     :indeterminate="picked.length > 0 && !allVisiblePicked"
                                     @change="toggleAll($event.target.checked)"></label></th>
               <th class="num col-extra">#</th>
@@ -251,15 +263,16 @@
                 <button type="button" class="sort-btn owner-sort" :class="{ on: ownerSort }" @click="ownerSort = !ownerSort"
                         :aria-pressed="ownerSort" title="Сначала владельцы" aria-label="Сначала владельцы">
                   <svg class="crown" aria-hidden="true"><use href="#crown"/></svg></button></th>
-              <th x-show="onLeads">Статус</th>
+              <th x-show="onSaved">Статус</th>
+              <th class="col-extra" x-show="onClients">Папка</th><th class="col-extra" x-show="onClients">Клиент с</th>
               <th class="col-extra">Район</th><th class="num col-extra">Рейтинг</th>
-              <th>Канал</th><th x-text="pricesTitle"></th></tr>
+              <th>Канал</th><th x-show="!onClients" x-text="pricesTitle"></th></tr>
         </thead>
         <tbody>
-          <template x-for="(l, i) in visible" :key="l.slug">
-            <tr x-init="appear($el)" @click="openCard(l.slug)"
-                :class="{ active: selected === l.slug, ['tint-' + l.priority]: tintRows && l.priority > 0 }">
-              <td class="pick" @click.stop><label class="pick-hit"><input type="checkbox" :aria-label="`Выбрать «${l.name}»`"
+          <template x-for="(l, i) in visible" :key="rowKey(l)">
+            <tr x-init="appear($el)" @click="openCard(l.slug, l.folder_id)"
+                :class="{ active: isActive(l), ['tint-' + l.priority]: tintRows && l.priority > 0 }">
+              <td class="pick" x-show="!onClients" @click.stop><label class="pick-hit"><input type="checkbox" :aria-label="`Выбрать «${l.name}»`"
                                                    :checked="picked.includes(l.slug)" @change="togglePick(l.slug)"></label></td>
               <td class="num muted col-extra" x-text="i + 1"></td>
               <td class="prio-col"><span class="prio-mark" :class="'p-' + (l.priority || 0)" role="img" :aria-label="priorityLabel(l.priority)"
@@ -267,20 +280,23 @@
               <td>
                 <div class="name">
                   <span class="thumb" :class="{ empty: !l.has_photo }">
-                    <img x-show="l.has_photo" :src="`${itemUrl(l.slug)}/hero`" loading="lazy" alt="" width="34" height="34"
+                    <img x-show="l.has_photo" :src="`${rowUrl(l)}/hero`" loading="lazy" alt="" width="34" height="34"
                          @error="$el.remove()">
                     <span x-show="!l.has_photo" x-text="initials(l.name)"></span>
                     <span class="thumb-crown" :class="l.owner" x-show="l.owner" role="img" :aria-label="ownerTitle(l.owner)"
                           :title="ownerTitle(l.owner)"><svg class="crown" aria-hidden="true"><use href="#crown"/></svg></span>
                   </span>
-                  <button type="button" class="title row-open" @click.stop="openCard(l.slug, $el)" x-text="l.name"></button>
+                  <button type="button" class="title row-open" @click.stop="openCard(l.slug, l.folder_id)" x-text="l.name"></button>
                 </div>
               </td>
               <td x-show="onLeads"><span class="st" :class="statusOf(l.status).id" x-text="statusOf(l.status).title"></span></td>
+              <td x-show="onClients"><span class="st" :class="clientStatusOf(l.client_status).id" x-text="clientStatusOf(l.client_status).title"></span></td>
+              <td class="muted col-extra nowrap-col" x-show="onClients" x-text="l.folder"></td>
+              <td class="muted col-extra nowrap-col" x-show="onClients" x-text="formatDate(l.client_since)"></td>
               <td class="muted col-extra" x-text="l.district || '—'"></td>
               <td class="num col-extra"><span x-show="l.rating" class="rating" x-text="l.rating"></span><span x-show="!l.rating" class="muted">—</span></td>
               <td><span class="channel" :class="channelKind(l.channel)" x-text="channelLabel(l.channel)"></span></td>
-              <td class="prices muted" x-text="pricesShort(l.prices)"></td>
+              <td class="prices muted" x-show="!onClients" x-text="pricesShort(l.prices)"></td>
             </tr>
           </template>
         </tbody>
@@ -296,7 +312,16 @@
       </a>
     </div>
 
-    <div class="empty" x-show="!onLeads && !list.length">
+    <div class="empty" x-show="onClients && !list.length">
+      <h2>Клиентов пока нет</h2>
+      <p>Откройте лид в «Сохранённых лидах» и нажмите «Перевести в клиенты»: он появится здесь.</p>
+      <a href="/leads" class="btn" @click.prevent="go('leads')">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#users"/></svg>
+        <span>Открыть сохранённые лиды</span>
+      </a>
+    </div>
+
+    <div class="empty" x-show="onSearch && !list.length">
       <template x-if="running"><p>Ищем в 2ГИС… Первые лиды появятся через минуту: Chrome проходит выдачу и открывает каждую фирму.</p></template>
       <template x-if="!running">
         <div>
@@ -365,6 +390,7 @@
       <a href="#docs-export">8. Выгрузка и сохранённые папки</a>
       <a href="#docs-leads">9. Страница «Сохранённые лиды»: работа с лидом</a>
       <a href="#docs-priority">10. Приоритет по карточке 2ГИС</a>
+      <a href="#docs-clients">11. Страница «Клиенты»</a>
     </nav>
 
     <article class="panel" id="docs-search">
@@ -520,9 +546,11 @@
         на поиске — «Сообщение» и «Крючок». На странице «Сохранённые лиды» там же статус и приоритет, «Комментарий»,
         «Сообщение», «Крючок», «Демо-приложение» и «Уже связались»:</p>
       <ul>
-        <li><b>Статус</b> — вручную: <span class="st client">Наш клиент</span> <span class="st waiting">Ожидаем ответ</span>
-          <span class="st no_answer">Не ответил</span> <span class="st lost">Слился</span>. Новый лид —
-          <span class="st new">Новый</span>; повторный клик по выбранному статусу снимает его.</li>
+        <li><b>Статус</b> — вручную, один из шести: <span class="st not_written">Ещё не написал</span> (у нового лида)
+          <span class="st written">Написал</span> <span class="st in_progress">В работе</span>
+          <span class="st almost">Почти купил</span> <span class="st bought">Купил</span> <span class="st refused">Отказался</span>.</li>
+        <li><b>Перевести в клиенты</b> — кнопка под статусами. Лид получает статус «Купил», уходит из папки (из таблицы,
+          счётчика и выгрузки) и появляется на странице «Клиенты» (раздел 11). Обратной кнопки пока нет.</li>
         <li><b>Приоритет</b> — от 5 (очень высокий) до 1 (очень низкий) или «Нет». Новый лид получает его из оценки по
           карточке 2ГИС (раздел 10), дальше его меняют вручную.</li>
         <li><b>Уже связались</b> — галочки напротив контактов из карточки: по каким уже связывались.</li>
@@ -532,6 +560,8 @@
         <li><b>Комментарий</b> — до 5000 символов, сохраняется кнопкой «Сохранить комментарий».</li>
         <li><b>Удалить лид</b> (внизу карточки) — с подтверждением; лид пропадает из папки вместе со статусом, комментарием и фото.</li>
       </ul>
+      <p>Старые статусы переведены: «Новый» → «Ещё не написал», «Ожидаем ответ» и «Не ответил» → «Написал», «Слился» →
+        «Отказался», «Наш клиент» → «Купил» и сразу в клиенты.</p>
       <p>Разделы и подразделы карточки (на обеих страницах) сворачиваются кликом по заголовку, значок в шапке
         сворачивает или разворачивает все сразу. При открытии лида все разделы развёрнуты.</p>
       <p>Эти поля хранятся у лида в конкретной папке. Повторное сохранение того же лида из поиска обновляет его карточку,
@@ -561,6 +591,20 @@
         открывает Chrome на 2ГИС и оценивает лиды папки без оценки — по одному запросу на лид с паузой 2 секунды.
         Приоритет и комментарий ставятся, только если они пустые. Если 2ГИС покажет капчу, оценка остановится; повторный
         клик продолжит с неоценённых.</p>
+    </article>
+
+    <article class="panel" id="docs-clients">
+      <h2>11. Страница «Клиенты»</h2>
+      <p>Клиенты: это лиды, переведённые в клиенты кнопкой «Перевести в клиенты» в карточке сохранённого лида. Страница
+        «Клиенты» показывает их из всех папок одной таблицей, сначала новые: фото, название, статус клиента, папка, дата
+        «Клиент с», район, рейтинг, канал. Фильтр по названию, раскраска и сортировка по приоритету, корона работают как в
+        «Сохранённых лидах». Выбора строк и выгрузки здесь нет.</p>
+      <p>У клиента вместо статуса лида <b>статус клиента</b>: <span class="st ok">Всё ок</span> (ставится при
+        переводе), <span class="st question">Есть вопрос</span>, <span class="st bug">Срочный баг</span>. Остальное в
+        карточке как у сохранённого лида: приоритет, «Комментарий», «Демо-приложение», «Уже связались»; внизу кнопка
+        «Удалить клиента» с подтверждением.</p>
+      <p>Клиент остаётся в своей папке, но в её таблице, счётчике и выгрузке его нет. Повторное сохранение той же фирмы из
+        поиска обновляет карточку клиента и не возвращает его в лиды. В файлы выгрузки статусы клиента не попадают.</p>
     </article>
   </section>
   </main>
@@ -605,7 +649,8 @@
           <p class="actions-note muted small" x-text="'Канал: ' + card.row['Канал'] + ' · ' + card.row['Писать сюда']"></p>
         </div>
 
-        <!-- Работа с клиентом, first in the card: message and hook; on «Лиды» also status, priority, comment, demo app, contacted -->
+        <!-- Работа с клиентом, first in the card: message and hook; on «Сохранённые лиды» and «Клиенты» also status
+             («Перевести в клиенты» for a lead), priority, comment, demo app, contacted -->
         <div class="block">
           <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('work')" @click="toggleSection('work')"><span class="chev" aria-hidden="true"></span>Работа с клиентом</button></h3>
           <div class="sec-body" x-show="isOpen('work')">
@@ -616,17 +661,40 @@
                   <b x-text="priorityTitle(card.assessment.priority)"></b> · <span x-text="card.assessment.note"></span></p>
               </div>
             </template>
-            <template x-if="onLeads && crm">
+            <template x-if="onSaved && crm">
               <div class="work-head">
-                <div class="sub-label">Статус</div>
-                <div class="status-pick" role="radiogroup" aria-label="Статус лида" @keydown="radioKeys($event)">
-                  <template x-for="s in statuses" :key="s.id">
-                    <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
-                            :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
-                      <span class="dot"></span><span x-text="s.title"></span></button>
-                  </template>
-                </div>
-                <p class="muted small" x-text="crm.status === 'new' ? 'Статус не выставлен — лид новый' : 'Повторный клик по статусу снимает его'"></p>
+                <template x-if="isClient">
+                  <div>
+                    <div class="sub-label">Статус клиента</div>
+                    <div class="status-pick" role="radiogroup" aria-label="Статус клиента" @keydown="radioKeys($event)">
+                      <template x-for="s in clientStatuses" :key="s.id">
+                        <button type="button" role="radio" class="st-btn" :class="s.id + (crm.client_status === s.id ? ' on' : '')"
+                                :aria-checked="crm.client_status === s.id" :disabled="crmBusy" @click="setClientStatus(s.id)">
+                          <span class="dot"></span><span x-text="s.title"></span></button>
+                      </template>
+                    </div>
+                    <p class="muted small" x-text="'Клиент с ' + formatDate(crm.client_since)"></p>
+                  </div>
+                </template>
+                <template x-if="!isClient">
+                  <div>
+                    <div class="sub-label">Статус</div>
+                    <div class="status-pick" role="radiogroup" aria-label="Статус лида" @keydown="radioKeys($event)">
+                      <template x-for="s in statuses" :key="s.id">
+                        <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
+                                :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
+                          <span class="dot"></span><span x-text="s.title"></span></button>
+                      </template>
+                    </div>
+                    <div class="row to-client">
+                      <button type="button" class="btn" :disabled="crmBusy" @click="makeClient()">
+                        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#handshake"/></svg>
+                        <span x-text="movingToClients ? 'Переводим…' : 'Перевести в клиенты'"></span>
+                      </button>
+                      <span class="muted small">Лид уйдёт из папки на страницу «Клиенты»</span>
+                    </div>
+                  </div>
+                </template>
                 <div class="sub-label">Приоритет</div>
                 <div class="prio-pick">
                   <div class="segmented" role="radiogroup" aria-label="Приоритет лида" @keydown="radioKeys($event)">
@@ -640,7 +708,7 @@
               </div>
             </template>
 
-            <template x-if="onLeads && crm">
+            <template x-if="onSaved && crm">
               <div class="sub-sec">
                 <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('comment')" @click="toggleSection('comment')"><span class="chev" aria-hidden="true"></span>Комментарий</button></h4>
                 <div class="sec-body" x-show="isOpen('comment')">
@@ -664,7 +732,7 @@
               <p class="sec-body" x-show="isOpen('hook')" x-text="card.row['Крючок']"></p>
             </div>
 
-            <template x-if="onLeads && crm">
+            <template x-if="onSaved && crm">
               <div class="sub-sec">
                 <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('demo')" @click="toggleSection('demo')"><span class="chev" aria-hidden="true"></span>Демо-приложение</button></h4>
                 <div class="sec-body" x-show="isOpen('demo')">
@@ -691,7 +759,7 @@
               </div>
             </template>
 
-            <template x-if="onLeads && crm">
+            <template x-if="onSaved && crm">
               <div class="sub-sec">
                 <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('channels')" @click="toggleSection('channels')"><span class="chev" aria-hidden="true"></span>Уже связались</button> <span class="count" x-text="crm.contacted.length || ''"></span></h4>
                 <div class="sec-body" x-show="isOpen('channels')">
@@ -769,10 +837,10 @@
 
         <p class="muted small">Папка в выгрузке: <code x-text="card.lead.folder"></code></p>
 
-        <div class="block delete-zone" x-show="onLeads">
+        <div class="block delete-zone" x-show="onSaved">
           <button type="button" class="btn danger-ghost" @click="deleteOpen = true">
             <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#trash-2"/></svg>
-            <span>Удалить лид</span>
+            <span x-text="deleteLabel"></span>
           </button>
         </div>
       </div>
@@ -785,12 +853,12 @@
   <div class="modal over-card" x-show="deleteOpen" x-transition x-ref="deleteDialog" role="alertdialog" aria-modal="true"
        aria-labelledby="delete-title" aria-describedby="delete-text" @keydown.tab="trapTab($event)">
     <h2 id="delete-title" x-text="'Удалить «' + cardName + '»?'"></h2>
-    <p class="muted" id="delete-text">Лид пропадёт из папки вместе со статусом, комментарием и фото. Отменить это нельзя.</p>
+    <p class="muted" id="delete-text" x-text="(isClient ? 'Клиент пропадёт' : 'Лид пропадёт из папки') + ' вместе со статусом, комментарием и фото. Отменить это нельзя.'"></p>
     <div class="modal-actions">
       <button type="button" class="btn ghost" data-autofocus @click="deleteOpen = false">Отмена</button>
       <button type="button" class="btn danger" :disabled="crmBusy" @click="deleteLead()">
         <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#trash-2"/></svg>
-        <span x-text="crmBusy ? 'Удаляем…' : 'Удалить лид'"></span>
+        <span x-text="crmBusy ? 'Удаляем…' : deleteLabel"></span>
       </button>
     </div>
   </div>

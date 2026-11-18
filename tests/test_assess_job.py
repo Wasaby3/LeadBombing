@@ -76,7 +76,7 @@ def test_old_leads_get_priority_comment_and_card_assessment(client, cards):
     assert leads == {'usadba-bannaya': 5, 'hlebnikovskie-bani': 3}
     card = client.get(f'/api/folders/{folder_id}/item/usadba-bannaya').get_json()
     assert card['crm']['comment'] == 'Сайта нет, кнопка «Забронировать» в 2ГИС — звонок'
-    assert card['assessment']['button']['kind'] == 'phone' and card['crm']['status'] == 'new'
+    assert card['assessment']['button']['kind'] == 'phone' and card['crm']['status'] == 'not_written'
 
 
 def test_work_set_by_hand_is_kept_and_assessed_leads_are_not_fetched_again(client, cards):

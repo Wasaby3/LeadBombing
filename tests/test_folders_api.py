@@ -75,21 +75,21 @@ def test_lead_work_is_saved_shown_in_list_and_card(client):
     folder_id = saved_folder(client)
     item = f'/api/folders/{folder_id}/item/usadba-bannaya'
     leads = client.get(f'/api/folders/{folder_id}').get_json()['leads']
-    assert [(lead['status'], lead['priority']) for lead in leads] == [('new', 0), ('new', 0)]
-    assert client.get(item).get_json()['crm']['status'] == 'new'
+    assert [(lead['status'], lead['priority']) for lead in leads] == [('not_written', 0), ('not_written', 0)]
+    assert client.get(item).get_json()['crm']['status'] == 'not_written'
 
     contact = {'title': 'Телефон', 'value': '+7 495 000-00-00'}
-    r = client.patch(item, json={'status': 'waiting', 'priority': 3, 'comment': 'звонил, перезвонить',
+    r = client.patch(item, json={'status': 'written', 'priority': 3, 'comment': 'звонил, перезвонить',
                                  'contacted': [contact], 'demo_url': 'https://demo.example/usadba'}).get_json()
-    assert r == {'ok': True, 'crm': {'status': 'waiting', 'priority': 3, 'comment': 'звонил, перезвонить',
+    assert r == {'ok': True, 'crm': {'status': 'written', 'priority': 3, 'comment': 'звонил, перезвонить',
                                      'contacted': [contact], 'demo_url': 'https://demo.example/usadba',
-                                     'demo_source': 'manual'}}
-    assert client.patch(item, json={'status': 'client'}).get_json()['crm']['comment'] == 'звонил, перезвонить'
+                                     'demo_source': 'manual', 'client_status': None, 'client_since': None}}
+    assert client.patch(item, json={'status': 'almost'}).get_json()['crm']['comment'] == 'звонил, перезвонить'
 
     card = client.get(item).get_json()
-    assert card['crm']['status'] == 'client' and card['row']['Баня'] == 'Усадьба Банная'
+    assert card['crm']['status'] == 'almost' and card['row']['Баня'] == 'Усадьба Банная'
     leads = client.get(f'/api/folders/{folder_id}').get_json()['leads']
-    assert (leads[0]['slug'], leads[0]['status'], leads[0]['priority']) == ('usadba-bannaya', 'client', 3)
+    assert (leads[0]['slug'], leads[0]['status'], leads[0]['priority']) == ('usadba-bannaya', 'almost', 3)
 
 
 def test_owner_crown_is_shown_in_search_and_folder_rows(client, monkeypatch):
@@ -116,10 +116,10 @@ def test_owner_crown_is_shown_in_search_and_folder_rows(client, monkeypatch):
 def test_resaving_a_lead_keeps_its_work(client):
     folder_id = saved_folder(client, ['usadba-bannaya'])
     item = f'/api/folders/{folder_id}/item/usadba-bannaya'
-    client.patch(item, json={'status': 'lost', 'comment': 'не интересно'})
+    client.patch(item, json={'status': 'refused', 'comment': 'не интересно'})
     assert client.post('/api/folders/save', json={'folder_id': folder_id}).get_json()['saved'] == 2
     crm = client.get(item).get_json()['crm']
-    assert (crm['status'], crm['comment']) == ('lost', 'не интересно')
+    assert (crm['status'], crm['comment']) == ('refused', 'не интересно')
 
 
 PHONE_BUTTON = [{'caption': 'Забронировать', 'type': 'phone', 'value': '+74991112570'}]
@@ -160,9 +160,9 @@ def test_bad_lead_change_is_refused(client):
     r = client.patch(item, json={'status': 'won'})
     assert r.status_code == 400 and 'статус' in r.get_json()['error']
     assert client.patch(item, data='not json', content_type='application/json').status_code == 400
-    assert client.patch(f'/api/folders/{folder_id}/item/nope', json={'status': 'lost'}).status_code == 404
-    assert client.patch(f'/api/folders/{folder_id + 99}/item/usadba-bannaya', json={'status': 'lost'}).status_code == 404
-    assert client.patch(f'/api/folders/{folder_id}/item/BAD!', json={'status': 'lost'}).status_code == 404
+    assert client.patch(f'/api/folders/{folder_id}/item/nope', json={'status': 'refused'}).status_code == 404
+    assert client.patch(f'/api/folders/{folder_id + 99}/item/usadba-bannaya', json={'status': 'refused'}).status_code == 404
+    assert client.patch(f'/api/folders/{folder_id}/item/BAD!', json={'status': 'refused'}).status_code == 404
 
 
 def test_deleted_lead_leaves_folder_with_its_photo(client, tmp_path):

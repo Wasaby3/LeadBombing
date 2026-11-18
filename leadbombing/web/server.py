@@ -15,6 +15,7 @@ from .account_api import register as register_account
 from .assess_job import register as register_assess
 from .auth import register as register_auth
 from .classic_api import register as register_classic
+from .clients_api import register as register_clients
 from .folders_api import register as register_folders
 from .leads_api import register as register_leads
 from .supabase import store_from_env
@@ -65,6 +66,7 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
     register_account(app)
     leads_job = register_leads(app, _load_cities)
     register_folders(app, leads_job)
+    register_clients(app)
     register_assess(app, lambda: leads_job.running)  # TEMP: assessment of old leads, see assess_job.py
     register_classic(app, _load_cities)
 
@@ -78,6 +80,7 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
 
     @app.route('/search')
     @app.route('/leads')
+    @app.route('/clients')
     @app.route('/profile')
     @app.route('/settings')
     @app.route('/docs')

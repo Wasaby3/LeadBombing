@@ -22,6 +22,15 @@ _RUN_FIELDS = 'id,sphere,query,cities,lead_limit,status,accepted,skipped,error,s
 _FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at'
 _FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
 _CRM_SELECT = ','.join(CRM_FIELDS)
+_ONLY_LEADS = {'client_status': 'is.null'}  # a folder shows, exports and assesses leads, not clients
+_OWNER_SELECT = 'contacts:card->contacts,legal:card->legal'  # what the owner crown needs, not the whole card
+
+
+def client_row(r: dict) -> dict:
+    """A clients table row from a folder_leads row with its folder name (`folder: {name}`)."""
+    return {**r['summary'], 'slug': r['slug'], 'folder_id': r['folder_id'], 'folder': r['folder']['name'],
+            'status': r['status'], 'priority': r['priority'], 'client_status': r['client_status'],
+            'client_since': r['client_since'], 'owner': card_owner_mark(r)}
 
 
 class StoreError(RuntimeError):
@@ -134,7 +143,8 @@ class SupabaseStore:
 
     def list_folders(self, token: str) -> list[dict]:
         rows = self._request('GET', '/rest/v1/folders', token, params={
-            'select': f'{_FOLDER_FIELDS},folder_leads(count)', 'order': 'created_at.desc'})
+            'select': f'{_FOLDER_FIELDS},folder_leads(count)', 'folder_leads.client_status': 'is.null',
+            'order': 'created_at.desc'})
         return [{**{k: v for k, v in r.items() if k != 'folder_leads'},
                  'count': r['folder_leads'][0]['count'] if r['folder_leads'] else 0} for r in rows]
 
@@ -159,9 +169,9 @@ class SupabaseStore:
                               prefer='resolution=merge-duplicates,return=minimal')
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
-        """Table rows in folder order, each with the lead's status and priority."""
+        """Table rows of the folder's leads (not clients) in folder order, each with the lead's status and priority."""
         rows = self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'summary,status,priority,contacts:card->contacts,legal:card->legal',  # not the whole card
+            'select': f'summary,status,priority,{_OWNER_SELECT}', **_ONLY_LEADS,
             'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
         return [{**r['summary'], 'status': r['status'], 'priority': r['priority'], 'owner': card_owner_mark(r)}
                 for r in rows]
@@ -173,11 +183,33 @@ class SupabaseStore:
         return {**rows[0]['card'], 'crm': crm_of(rows[0])} if rows else None
 
     def update_folder_lead(self, token: str, folder_id: int, slug: str, fields: dict) -> Optional[dict]:
-        """Change the work on a lead (fields from lead_crm); the lead's crm after it, None if there is no such lead."""
+        """Change the work on a lead (fields from lead_crm); the lead's crm after it, None if there is no such lead.
+        A client status is changed only for a client: for a lead the result is None too."""
+        only_clients = {'client_status': 'not.is.null'} if 'client_status' in fields else {}
         rows = self._request('PATCH', '/rest/v1/folder_leads', token, json={**fields, 'worked_at': _now()},
-                             params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}', 'select': _CRM_SELECT},
+                             params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}', 'select': _CRM_SELECT,
+                                     **only_clients},
                              prefer='return=representation')
         return crm_of(rows[0]) if rows else None
+
+    def make_client(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
+        """Make a lead a client: status «Купил», client status «Всё ок». Its crm, None if there is no such lead or it
+        is a client already."""
+        now = _now()
+        rows = self._request('PATCH', '/rest/v1/folder_leads', token,
+                             json={'status': 'bought', 'client_status': 'ok', 'client_since': now, 'worked_at': now},
+                             params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}', 'select': _CRM_SELECT,
+                                     **_ONLY_LEADS},
+                             prefer='return=representation')
+        return crm_of(rows[0]) if rows else None
+
+    def list_clients(self, token: str) -> list[dict]:
+        """Table rows of all clients, newest first: the lead row plus its folder, statuses and client_since."""
+        rows = self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': f'folder_id,slug,summary,status,priority,client_status,client_since,{_OWNER_SELECT},'
+                      'folder:folders(name)',
+            'client_status': 'not.is.null', 'order': 'client_since.desc'})
+        return [client_row(r) for r in rows]
 
     def delete_folder_lead(self, token: str, folder_id: int, slug: str) -> bool:
         rows = self._request('DELETE', '/rest/v1/folder_leads', token,
@@ -186,16 +218,16 @@ class SupabaseStore:
         return bool(rows)
 
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
-        """[{slug, raw: {item, prices}}] in folder order, for export."""
+        """[{slug, raw: {item, prices}}] of the folder's leads (not clients) in folder order, for export."""
         return self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'slug,raw', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+            'select': 'slug,raw', **_ONLY_LEADS, 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
 
     # --- TEMP: assessment of leads saved before the booking button was collected (web/assess_job.py) ---
 
     def folder_assess_rows(self, token: str, folder_id: int) -> list[dict]:
         """[{slug, card, item, priority, comment}] in folder order: what the assessment of old leads needs."""
         return self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'slug,card,item:raw->item,priority,comment', 'folder_id': f'eq.{folder_id}',
+            'select': 'slug,card,item:raw->item,priority,comment', **_ONLY_LEADS, 'folder_id': f'eq.{folder_id}',
             'order': 'added_at.asc'})
 
     def set_assessment(self, token: str, folder_id: int, slug: str, fields: dict) -> None:

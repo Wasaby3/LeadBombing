@@ -1,5 +1,6 @@
-/* LeadBombing PWA: login, side menu pages (search, leads, profile, settings, docs), search form, live leads table,
-   saved lead folders («Лиды») with the work on each lead, lead card, export. Alpine.js + Motion. */
+/* LeadBombing PWA: login, side menu pages (search, leads, clients, profile, settings, docs), search form, live leads
+   table, saved lead folders («Сохранённые лиды»), clients («Клиенты»), lead card, export. Alpine.js + Motion.
+   The work on a saved lead or client (statuses, priority, comment, demo, «Перевести в клиенты») is in crm.js. */
 const POLL_MS = 900;
 const SAVE_SETTINGS_MS = 800;
 const TOAST_MS = 2600;
@@ -7,18 +8,7 @@ const FORM_KEY = 'lb.form';  // the form of the last search started: unsent edit
 const PATH_KEY = 'lb.exportPath';
 const THEME_KEY = 'lb.theme';
 const TINT_KEY = 'lb.tintRows';  // table rows coloured by priority (on by default)
-const PAGES = ['search', 'leads', 'profile', 'settings', 'docs'];
-/* Work on a saved lead («Лиды»): statuses in the order of the picker, priorities from high to none. */
-const STATUSES = [
-  { id: 'client', title: 'Наш клиент' }, { id: 'waiting', title: 'Ожидаем ответ' },
-  { id: 'no_answer', title: 'Не ответил' }, { id: 'lost', title: 'Слился' },
-];
-const NEW_STATUS = { id: 'new', title: 'Новый' };
-/* Lead priority 0–5: set by hand on «Лиды», or assessed from the 2GIS card (leads/booking.py); 5 is the hottest. */
-const PRIORITIES = [{ id: 5, short: '5', title: 'Очень высокий', icon: 'flame-high' },
-  { id: 4, short: '4', title: 'Высокий', icon: 'flame' }, { id: 3, short: '3', title: 'Средний', icon: 'sun' },
-  { id: 2, short: '2', title: 'Низкий', icon: 'cloud' }, { id: 1, short: '1', title: 'Очень низкий', icon: 'snowflake' },
-  { id: 0, short: 'Нет', title: 'Не задан', icon: 'circle-dashed' }];
+const PAGES = ['search', 'leads', 'clients', 'profile', 'settings', 'docs'];
 const SORT_NEXT = { '': 'desc', desc: 'asc', asc: '' };  // priority column: high first, low first, folder order
 const OWNER_RANK = { owner: 2, maybe: 1 };  // row.owner from leads/contacts.py owner_mark
 const OWNER_TITLES = { owner: 'Есть контакт руководителя', maybe: 'Возможно, номер владельца' };
@@ -129,8 +119,13 @@ async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   return data;
 }
 
+/* Merge parts of the component (crm.js) keeping their getters as getters. */
+function withParts(base, ...parts) {
+  return parts.reduce((all, part) => Object.defineProperties(all, Object.getOwnPropertyDescriptors(part)), base);
+}
+
 document.addEventListener('alpine:init', () => {
-  Alpine.data('leadsApp', () => ({
+  Alpine.data('leadsApp', () => withParts({
     meta: { spheres: [], cities: [] },
     form: loadForm(),
     searchForm: loadForm(),  // what the table was searched with; `form` returns to it unless «Найти лиды» is pressed
@@ -138,7 +133,7 @@ document.addEventListener('alpine:init', () => {
     status: 'idle', error: '', log: '', cursor: 0,
     params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
     leads: [], skipped: [], filter: '', showSkipped: false,
-    selected: null, card: null,
+    selected: null, card: null, cardFolder: null,  // the folder of the open saved lead or client
     exportOpen: false, exporting: false, exportPath: store.get(PATH_KEY, ''),
     toast: '', _toastTimer: null, _pollTimer: null,
     user: null, authChecked: false, auth: { login: '', password: '', error: '', busy: false },
@@ -148,8 +143,7 @@ document.addEventListener('alpine:init', () => {
     tintRows: store.get(TINT_KEY, true),
     assess: null, assessPolling: false,  // TEMP: assessment of old leads (assess_job.py)
     saveOpen: false, saving: false, saveForm: { mode: 'new', name: '', folderId: null },
-    statuses: STATUSES, priorities: PRIORITIES, prioritySort: '', ownerSort: false,
-    crm: null, draft: { comment: '', demoUrl: '' }, crmBusy: false, deleteOpen: false, collapsed: {},
+    prioritySort: '', ownerSort: false, collapsed: {},
 
     async init() {
       this.$watch('citiesOpen', (open) => open && this.$nextTick(() => this.$refs.cityFilter.focus()));
@@ -192,6 +186,7 @@ document.addEventListener('alpine:init', () => {
       await this.poll();  // restore the current run after a reload
       if (!this.leads.length && !this.running && !this.searchCleared) await this.loadSaved();
       if (this.onLeads) await this.loadFolders();
+      if (this.onClients) await this.loadClients();
     },
 
     async signIn() {
@@ -236,7 +231,9 @@ document.addEventListener('alpine:init', () => {
       this.ownerSort = false;
       this.closeCard();
       if (page === 'leads') this.loadFolders();
+      if (page === 'clients') this.loadClients();
     },
+    get onSearch() { return this.page === 'search'; },
     get onLeads() { return this.page === 'leads'; },
 
     async fetchFolders() {
@@ -339,9 +336,14 @@ document.addEventListener('alpine:init', () => {
         this.saving = false;
       }
     },
-    itemUrl(slug) {
-      return this.onLeads ? `/api/folders/${this.folderId}/item/${slug}` : `/api/leads/item/${slug}`;
+    /* A lead of the search, or a saved lead or client of the folder (the open card's by default). */
+    itemUrl(slug, folderId = this.cardFolder) {
+      return this.onSaved ? `/api/folders/${folderId}/item/${slug}` : `/api/leads/item/${slug}`;
     },
+    rowUrl(l) { return this.itemUrl(l.slug, l.folder_id ?? this.folderId); },
+    /* Client rows come from all folders: the same firm can be a client in two of them. */
+    rowKey(l) { return l.folder_id ? `${l.folder_id}/${l.slug}` : l.slug; },
+    isActive(l) { return this.selected === l.slug && (!this.onSaved || this.isRow(l, l.slug, this.cardFolder)); },
     get currentTheme() { return this.theme || (this.systemDark ? 'dark' : 'light'); },
     setTheme(theme) {
       this.theme = theme;
@@ -427,10 +429,13 @@ document.addEventListener('alpine:init', () => {
       const on = new Set(this.form.cities);
       return [...list.filter((c) => on.has(c.code)), ...list.filter((c) => !on.has(c.code))];
     },
-    get list() { return this.onLeads ? this.folderLeads : this.leads; },
+    get list() { return this.onLeads ? this.folderLeads : this.onClients ? this.clients : this.leads; },
     get exportCount() { return this.picked.length || this.list.length; },
     /* Export: a saved folder with leads, or a new search (leads of past searches come back only for viewing). */
-    get canExport() { return this.onLeads ? this.folderLeads.length > 0 : this.leads.length > 0 && !this.fromAccount; },
+    get canExport() {
+      if (this.onSearch) return this.leads.length > 0 && !this.fromAccount;
+      return this.onLeads && this.folderLeads.length > 0;
+    },
     get allVisiblePicked() {
       return this.visible.length > 0 && this.visible.every((l) => this.picked.includes(l.slug));
     },
@@ -675,8 +680,9 @@ document.addEventListener('alpine:init', () => {
       next.click();
     },
 
-    async openCard(slug) {
+    async openCard(slug, folderId = this.folderId) {
       this.selected = slug;
+      this.cardFolder = this.onSaved ? folderId : null;
       this.card = null;
       this.collapsed = {};
       try {
@@ -700,75 +706,13 @@ document.addEventListener('alpine:init', () => {
       this.collapsed = this.allCollapsed ? {} : Object.fromEntries([...SECTIONS, ...SUB_SECTIONS].map((k) => [k, true]));
     },
 
-    /* Work on a saved lead: status, priority, contacted channels, demo app, comment, delete. */
-    statusOf(id) { return STATUSES.find((s) => s.id === id) || NEW_STATUS; },
-    priorityTitle(id) { return PRIORITIES.find((p) => p.id === (id || 0))?.title || 'Не задан'; },
-    priorityIcon(id) { return `/static/app/vendor/icons.svg#${PRIORITIES.find((p) => p.id === (id || 0))?.icon || 'circle-dashed'}`; },
-    priorityLabel(id) { return id ? `Приоритет: ${this.priorityTitle(id).toLowerCase()} (${id} из 5)` : 'Приоритет не задан'; },
+    /* Table: priority sort, owner crowns, row tint. */
     sortByPriority() { this.prioritySort = SORT_NEXT[this.prioritySort]; },
     ownerTitle(mark) { return OWNER_TITLES[mark] || ''; },
     get prioritySortTitle() {
       return { '': 'Сортировать по приоритету', desc: 'Сначала высокий приоритет', asc: 'Сначала низкий приоритет' }[this.prioritySort];
     },
     saveTint() { store.set(TINT_KEY, this.tintRows); },
-    /* PATCH the lead; `instant` shows the change before the server answers and rolls it back on an error. */
-    async saveCrm(patch, { done = '', instant = false } = {}) {
-      const slug = this.selected;
-      const before = this.crm;
-      if (instant) this.crm = { ...before, ...patch };
-      this.crmBusy = true;
-      try {
-        const { crm } = await api(this.itemUrl(encodeURIComponent(slug)), patch, 'PATCH');
-        this.folderLeads = this.folderLeads.map((l) => (l.slug === slug ? { ...l, status: crm.status, priority: crm.priority } : l));
-        if (this.selected === slug) this.crm = crm;
-        if (done) this.notify(done);
-        return true;
-      } catch (e) {
-        if (this.selected === slug) this.crm = before;
-        if (e.status !== 401) this.notify(`Не сохранено: ${e.message}`);
-        return false;
-      } finally {
-        this.crmBusy = false;
-      }
-    },
-    setStatus(id) {
-      const status = this.crm.status === id ? NEW_STATUS.id : id;  // a second click takes the status off
-      this.saveCrm({ status }, { instant: true });
-    },
-    setPriority(id) { this.saveCrm({ priority: id }, { instant: true }); },
-    isContacted(c) { return (this.crm?.contacted || []).some((x) => x.title === c.title && x.value === c.value); },
-    toggleContacted(c) {
-      const others = this.crm.contacted.filter((x) => !(x.title === c.title && x.value === c.value));
-      const contacted = this.isContacted(c) ? others : [...others, { title: c.title, value: c.value }];
-      this.saveCrm({ contacted }, { instant: true });
-    },
-    get commentChanged() { return this.crm && this.draft.comment.trim() !== this.crm.comment; },
-    async saveComment() {
-      if (await this.saveCrm({ comment: this.draft.comment }, { done: 'Комментарий сохранён' })) this.draft.comment = this.crm.comment;
-    },
-    get demoChanged() { return this.crm && this.draft.demoUrl.trim() !== (this.crm.demo_url || ''); },
-    get demoUrlValid() { return !this.draft.demoUrl.trim() || /^https?:\/\/\S+$/i.test(this.draft.demoUrl.trim()); },
-    async saveDemo() {
-      const done = this.draft.demoUrl.trim() ? 'Ссылка на демо сохранена' : 'Ссылка на демо удалена';
-      if (await this.saveCrm({ demo_url: this.draft.demoUrl }, { done })) this.draft.demoUrl = this.crm.demo_url || '';
-    },
-    async deleteLead() {
-      const slug = this.selected;
-      this.crmBusy = true;
-      try {
-        await api(this.itemUrl(encodeURIComponent(slug)), undefined, 'DELETE');
-        this.folderLeads = this.folderLeads.filter((l) => l.slug !== slug);
-        this.folders = this.folders.map((f) => (f.id === this.folderId ? { ...f, count: f.count - 1 } : f));
-        this.picked = this.picked.filter((x) => x !== slug);
-        this.closeCard();
-        this.notify('Лид удалён');
-      } catch (e) {
-        this.deleteOpen = false;
-        if (e.status !== 401) this.notify(`Не удалено: ${e.message}`);
-      } finally {
-        this.crmBusy = false;
-      }
-    },
 
     get cardName() { return this.card ? (this.card.row['Баня'] || this.card.row['Название']) : ''; },
     get cardPrices() {
@@ -882,5 +826,5 @@ document.addEventListener('alpine:init', () => {
     async openFolder() {
       await api('/api/leads/open-folder', { path: this.exportPath }).catch((e) => this.notify(e.message));
     },
-  }));
+  }, crmPart()));
 });

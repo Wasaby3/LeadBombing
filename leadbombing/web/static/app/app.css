@@ -19,11 +19,12 @@
   --tg: #2a9bd8;
   --vk: #3f6fd8;
   --owner: #b7791f;
-  /* Lead statuses on the «Лиды» page */
-  --st-client: #1f9d55;
-  --st-lost: #d93f3f;
-  --st-waiting: #a88400;
-  --st-no-answer: #dd6b20;
+  /* Statuses of a lead («Сохранённые лиды») and a client («Клиенты»): good, waiting, active, warm, bad */
+  --st-good: #1f9d55;
+  --st-wait: #a88400;
+  --st-active: #2b6fd6;
+  --st-warm: #dd6b20;
+  --st-bad: #d93f3f;
   --prio-cold: #3b82f6;
   --prio-hot: #e03131;
   --prio-tint: 12%;
@@ -47,10 +48,11 @@
     --accent-fill-hover: #6262de;
     --danger: #f06060;
     --owner: #e3b341;
-    --st-client: #3fbf74;
-    --st-lost: #f06060;
-    --st-waiting: #e6c33a;
-    --st-no-answer: #f2913d;
+    --st-good: #3fbf74;
+    --st-wait: #e6c33a;
+    --st-active: #5c9df2;
+    --st-warm: #f2913d;
+    --st-bad: #f06060;
     --prio-cold: #4f8ff7;
     --prio-hot: #f25f5f;
     --prio-tint: 16%;
@@ -72,10 +74,11 @@
   --accent-fill-hover: #6262de;
   --danger: #f06060;
   --owner: #e3b341;
-  --st-client: #3fbf74;
-  --st-lost: #f06060;
-  --st-waiting: #e6c33a;
-  --st-no-answer: #f2913d;
+  --st-good: #3fbf74;
+  --st-wait: #e6c33a;
+  --st-active: #5c9df2;
+  --st-warm: #f2913d;
+  --st-bad: #f06060;
   --prio-cold: #4f8ff7;
   --prio-hot: #f25f5f;
   --prio-tint: 16%;
@@ -401,15 +404,17 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .login-card h1 { margin: 4px 0 2px; font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
 .login-card .alert { margin-top: 0; }
 .login-card .btn { height: 40px; margin-top: 4px; }
-/* «Лиды»: the work on a saved lead — status, priority, contacted channels, demo app, comment */
+/* «Сохранённые лиды» and «Клиенты»: the work on a saved lead — status, priority, contacted channels, demo app, comment */
 .st { --c: var(--muted); display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px;
   font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--c);
   background: color-mix(in srgb, var(--c) 13%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
 .st::before, .st-btn .dot { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
-.st.client, .st-btn.client { --c: var(--st-client); }
-.st.lost, .st-btn.lost { --c: var(--st-lost); }
-.st.waiting, .st-btn.waiting { --c: var(--st-waiting); }
-.st.no_answer, .st-btn.no_answer { --c: var(--st-no-answer); }
+/* Lead: not_written stays muted. Client: ok, question, bug. */
+.st.written, .st-btn.written, .st.question, .st-btn.question { --c: var(--st-wait); }
+.st.in_progress, .st-btn.in_progress { --c: var(--st-active); }
+.st.almost, .st-btn.almost { --c: var(--st-warm); }
+.st.bought, .st-btn.bought, .st.ok, .st-btn.ok { --c: var(--st-good); }
+.st.refused, .st-btn.refused, .st.bug, .st-btn.bug { --c: var(--st-bad); }
 /* Priority 0–5: one mark right before the photo (no gap to it) — big flame 5, flame 4, sun 3, cloud 2, snowflake 1,
    dashed circle 0 — in the same heat colour as the row tint. */
 .prio-col { width: 1%; white-space: nowrap; }
@@ -454,6 +459,8 @@ tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: va
 .st-btn:hover:not(:disabled) { color: var(--text); border-color: color-mix(in srgb, var(--c) 50%, var(--line)); }
 .st-btn.on { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); }
 .st-btn:disabled, .segmented button:disabled { cursor: progress; }
+.block .row.to-client { justify-content: flex-start; flex-wrap: wrap; gap: 6px 12px; margin: 10px 0 2px; }
+.nowrap-col { white-space: nowrap; }
 .contacted { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
 .contacted .check { margin: 0 -8px; word-break: break-word; }
 .contacted .contact-type { width: 100px; flex: none; }

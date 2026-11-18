@@ -4,11 +4,12 @@ from __future__ import annotations
 import copy
 import itertools
 import time
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from leadbombing.leads.contacts import card_owner_mark
 from leadbombing.web.lead_crm import DEFAULT_CRM, crm_of
-from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError
+from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError, client_row
 
 ADMIN_ID = 'a0000000-0000-4000-8000-000000000001'
 TOKEN_TTL_S = 3600
@@ -116,7 +117,11 @@ class FakeStore:
 
     def list_folders(self, token: str) -> list[dict]:
         self._check(token)
-        return [{**copy.deepcopy(f), 'count': len(self.folder_items[f['id']])} for f in reversed(self.folders.values())]
+        return [{**copy.deepcopy(f), 'count': len(self._leads_of(f['id']))} for f in reversed(self.folders.values())]
+
+    def _leads_of(self, folder_id: int) -> list[dict]:
+        """The folder's leads, not its clients."""
+        return [r for r in self.folder_items.get(folder_id, {}).values() if r['client_status'] is None]
 
     def add_to_folder(self, token: str, folder_id: int, leads: list[dict]) -> None:
         self._write(token)
@@ -131,7 +136,7 @@ class FakeStore:
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
         return [{**copy.deepcopy(r['summary']), 'status': r['status'], 'priority': r['priority'],
-                 'owner': card_owner_mark(r['card'])} for r in self.folder_items.get(folder_id, {}).values()]
+                 'owner': card_owner_mark(r['card'])} for r in self._leads_of(folder_id)]
 
     def folder_card(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
         self._check(token)
@@ -141,10 +146,27 @@ class FakeStore:
     def update_folder_lead(self, token: str, folder_id: int, slug: str, fields: dict) -> Optional[dict]:
         self._write(token)
         items = self.folder_items.get(folder_id, {})
-        if slug not in items:
+        if slug not in items or ('client_status' in fields and items[slug]['client_status'] is None):
             return None
         items[slug] = {**items[slug], **copy.deepcopy(fields)}
         return copy.deepcopy(crm_of(items[slug]))
+
+    def make_client(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
+        self._write(token)
+        items = self.folder_items.get(folder_id, {})
+        if slug not in items or items[slug]['client_status'] is not None:
+            return None
+        since = datetime.now(timezone.utc).isoformat()
+        items[slug] = {**items[slug], 'status': 'bought', 'client_status': 'ok', 'client_since': since}
+        return copy.deepcopy(crm_of(items[slug]))
+
+    def list_clients(self, token: str) -> list[dict]:
+        self._check(token)
+        rows = [{**copy.deepcopy(r), 'folder_id': folder_id, 'folder': {'name': self.folders[folder_id]['name']},
+                 'contacts': r['card'].get('contacts'), 'legal': r['card'].get('legal')}
+                for folder_id, items in self.folder_items.items() for r in items.values()
+                if r['client_status'] is not None]
+        return [client_row(r) for r in sorted(rows, key=lambda r: r['client_since'], reverse=True)]
 
     def delete_folder_lead(self, token: str, folder_id: int, slug: str) -> bool:
         self._write(token)
@@ -152,13 +174,13 @@ class FakeStore:
 
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
-        return [{'slug': r['slug'], 'raw': copy.deepcopy(r['raw'])} for r in self.folder_items.get(folder_id, {}).values()]
+        return [{'slug': r['slug'], 'raw': copy.deepcopy(r['raw'])} for r in self._leads_of(folder_id)]
 
     # TEMP: assessment of old leads (web/assess_job.py)
     def folder_assess_rows(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
         return [{'slug': r['slug'], 'card': copy.deepcopy(r['card']), 'item': copy.deepcopy(r['raw']['item']),
-                 'priority': r['priority'], 'comment': r['comment']} for r in self.folder_items.get(folder_id, {}).values()]
+                 'priority': r['priority'], 'comment': r['comment']} for r in self._leads_of(folder_id)]
 
     def set_assessment(self, token: str, folder_id: int, slug: str, fields: dict) -> None:
         self._write(token)
