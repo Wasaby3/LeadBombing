@@ -42,7 +42,8 @@ def lead_summary(event: dict) -> dict[str, Any]:
     return {'slug': event['slug'], 'name': row.get('Баня') or row.get('Название'), 'district': lead.get('district'),
             'rating': lead.get('rating'), 'reviews': lead.get('reviews'), 'channel': row.get('Канал'),
             'write_here': row.get('Писать сюда'), 'has_photo': bool(lead['photos'].get('hero_url')),
-            'prices': names, 'updated': event.get('updated', False)}
+            'prices': names, 'updated': event.get('updated', False),
+            'priority': (event.get('assessment') or {}).get('priority', 0)}  # from the 2GIS card, see leads/booking.py
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 STATUSES = ('new', 'client', 'lost', 'waiting', 'no_answer')
-MAX_PRIORITY = 3  # 0 not set, 1 low, 2 medium, 3 high
+MAX_PRIORITY = 5  # 0 not set, 1 very low … 5 very high (see leads/booking.py for the automatic one)
 MAX_COMMENT = 5000
 MAX_URL = 2000
 MAX_CONTACTED = 50

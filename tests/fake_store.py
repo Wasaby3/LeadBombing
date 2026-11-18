@@ -121,9 +121,11 @@ class FakeStore:
         self._write(token)
         items = self.folder_items[folder_id]
         for lead in leads:
+            snapshot = {k: v for k, v in lead.items() if k != 'initial'}
             old = items.pop(lead['slug'], None)  # a re-added lead moves to the end, like a newer added_at
-            work = crm_of(old) if old else DEFAULT_CRM  # the snapshot is replaced, the work on the lead is kept
-            items[lead['slug']] = {**copy.deepcopy(work), **copy.deepcopy(lead)}
+            # the snapshot is replaced, the work on the lead is kept; a new lead starts with its `initial` work
+            work = crm_of(old) if old else {**DEFAULT_CRM, **(lead.get('initial') or {})}
+            items[lead['slug']] = {**copy.deepcopy(work), **copy.deepcopy(snapshot)}
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
@@ -150,6 +152,18 @@ class FakeStore:
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
         return [{'slug': r['slug'], 'raw': copy.deepcopy(r['raw'])} for r in self.folder_items.get(folder_id, {}).values()]
+
+    # TEMP: assessment of old leads (web/assess_job.py)
+    def folder_assess_rows(self, token: str, folder_id: int) -> list[dict]:
+        self._check(token)
+        return [{'slug': r['slug'], 'card': copy.deepcopy(r['card']), 'item': copy.deepcopy(r['raw']['item']),
+                 'priority': r['priority'], 'comment': r['comment']} for r in self.folder_items.get(folder_id, {}).values()]
+
+    def set_assessment(self, token: str, folder_id: int, slug: str, fields: dict) -> None:
+        self._write(token)
+        items = self.folder_items.get(folder_id, {})
+        if slug in items:
+            items[slug] = {**items[slug], **copy.deepcopy(fields)}
 
 
 def login(client: Any, password: str = 'admin') -> Any:

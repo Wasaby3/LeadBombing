@@ -13,13 +13,16 @@ from typing import Any, Callable, Optional
 from ..logger import logger
 from ..parser.exceptions import ParserException
 from . import firm
+from .booking import BOOKING_EXPR, assess
 from .contacts import contact_book
 from .prices import PRICES_EXPR
 from .spheres import BaniSphere
 from .text import slugify, unique
 
 KEEP = ('Статус', 'Руководитель')  # filled by hand, never overwritten
-CARD_KEYS = ('lead', 'row', 'business', 'contacts', 'legal')  # what the web app keeps of a `lead` event
+CARD_KEYS = ('lead', 'row', 'business', 'contacts', 'legal', 'assessment')  # what the web app keeps of a `lead` event
+# The prices tab page also has the firm's «Забронировать» button: both come from one request.
+FIRM_STATE_EXPR = '({prices: %s, booking: %s})' % (PRICES_EXPR, BOOKING_EXPR)
 
 
 class RunCancelled(Exception):
@@ -160,14 +163,17 @@ class LeadsWriter:
         if known and not self._refresh:
             return self._skip('уже в базе (кэш, --writer.refresh yes — обновить)', short)
 
-        prices = None
+        state: dict = {}
         if self.fetch_state:
-            prices = self.fetch_state(f'/firm/{firm_id}/tab/prices', PRICES_EXPR % json.dumps(firm_id))
+            fid = json.dumps(firm_id)
+            state = self.fetch_state(f'/firm/{firm_id}/tab/prices', FIRM_STATE_EXPR % (fid, fid)) or {}
+        prices, booking = state.get('prices'), state.get('booking')
         hero = self._download_hero(item)
-        slug = self._store(item, prices, hero, known)
-        self.raw.append({'item': item, 'prices': prices, 'hero': hero, 'slug': slug})
+        slug = self._store(item, prices, hero, known, booking)
+        self.raw.append({'item': item, 'prices': prices, 'booking': booking, 'hero': hero, 'slug': slug})
 
-    def _store(self, item: dict, prices: Optional[dict], hero: Optional[bytes], known: Optional[dict]) -> str:
+    def _store(self, item: dict, prices: Optional[dict], hero: Optional[bytes], known: Optional[dict],
+               booking: Optional[list] = None) -> str:
         firm_id = firm.firm_id(item)
         short = firm.short_name(item)
         prefix = self.sphere.slug_prefix
@@ -194,7 +200,7 @@ class LeadsWriter:
         logger.info('Лид: %s → tenants/%s', short, slug)
         if self.on_event:
             self.on_event({'type': 'lead', 'slug': slug, 'updated': bool(known), **result,
-                           **card_details(item, self.sphere)})
+                           **card_details(item, self.sphere), 'assessment': assess(item, booking)})
         return slug
 
     def _download_hero(self, item: dict) -> Optional[bytes]:

@@ -180,6 +180,7 @@
       <div class="counters">
         <span><b x-text="list.length"></b> <span x-text="leadsWord(list.length)"></span></span>
         <span class="muted" x-show="!onLeads && fromAccount">из прошлых поисков — чтобы сохранить или выгрузить, начните новый поиск</span>
+        <label class="toggle" x-show="list.length"><input type="checkbox" x-model="tintRows" @change="saveTint()"> Раскрасить по приоритету</label>
         <button type="button" class="link toggle-skipped" x-show="!onLeads" @click="showSkipped = !showSkipped"
                 :disabled="!skipped.length" :aria-expanded="showSkipped" aria-controls="skipped-list">
           Отсеяно: <b x-text="skipped.length"></b>
@@ -193,6 +194,13 @@
                 :title="running ? 'Сохранить можно после остановки поиска' : ''">
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-plus"/></svg>
           <span>Сохранить лиды</span>
+        </button>
+        <!-- TEMP: assessment of old leads by their 2GIS card (assess_job.py); remove once old folders are assessed -->
+        <button type="button" class="btn" x-show="onLeads && list.length" @click="toggleAssess()"
+                :title="assessTitle" :aria-label="assessing ? assessTitle : null">
+          <svg class="icon" aria-hidden="true" x-show="!assessing"><use href="/static/app/vendor/icons.svg#play"/></svg>
+          <svg class="icon" aria-hidden="true" x-show="assessing"><use href="/static/app/vendor/icons.svg#square"/></svg>
+          <span x-text="assessLabel"></span>
         </button>
         <button type="button" class="btn primary" x-show="canExport" @click="exportOpen = true">
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#download"/></svg>
@@ -232,21 +240,26 @@
           <tr><th class="pick"><label class="pick-hit"><input type="checkbox" aria-label="Выбрать все" :checked="allVisiblePicked"
                                     :indeterminate="picked.length > 0 && !allVisiblePicked"
                                     @change="toggleAll($event.target.checked)"></label></th>
-              <th class="num col-extra">#</th><th>Название</th>
-              <th x-show="onLeads">Статус</th>
-              <th x-show="onLeads" :aria-sort="{ desc: 'descending', asc: 'ascending' }[prioritySort] || 'none'">
-                <button type="button" class="sort-btn" @click="sortByPriority()" title="Сортировать по приоритету">Приоритет
+              <th class="num col-extra">#</th>
+              <th class="prio-col" :aria-sort="{ desc: 'descending', asc: 'ascending' }[prioritySort] || 'none'">
+                <button type="button" class="sort-btn" @click="sortByPriority()" :title="prioritySortTitle" :aria-label="prioritySortTitle">
+                  <svg class="icon sort-mark" aria-hidden="true" x-show="!prioritySort"><use href="/static/app/vendor/icons.svg#chevrons-up-down"/></svg>
                   <svg class="icon sort-mark" aria-hidden="true" x-show="prioritySort === 'desc'"><use href="/static/app/vendor/icons.svg#arrow-down"/></svg>
                   <svg class="icon sort-mark" aria-hidden="true" x-show="prioritySort === 'asc'"><use href="/static/app/vendor/icons.svg#arrow-up"/></svg></button></th>
+              <th>Название</th>
+              <th x-show="onLeads">Статус</th>
               <th class="col-extra">Район</th><th class="num col-extra">Рейтинг</th>
               <th>Канал</th><th x-text="pricesTitle"></th></tr>
         </thead>
         <tbody>
           <template x-for="(l, i) in visible" :key="l.slug">
-            <tr x-init="appear($el)" @click="openCard(l.slug)" :class="{ active: selected === l.slug }">
+            <tr x-init="appear($el)" @click="openCard(l.slug)"
+                :class="{ active: selected === l.slug, ['tint-' + l.priority]: tintRows && l.priority > 0 }">
               <td class="pick" @click.stop><label class="pick-hit"><input type="checkbox" :aria-label="`Выбрать «${l.name}»`"
                                                    :checked="picked.includes(l.slug)" @change="togglePick(l.slug)"></label></td>
               <td class="num muted col-extra" x-text="i + 1"></td>
+              <td class="prio-col"><span class="prio-stars" role="img" :aria-label="priorityLabel(l.priority)"
+                                         :title="priorityLabel(l.priority)"><template x-for="n in (l.priority || 0)" :key="n"><svg class="star" aria-hidden="true"><use href="/static/app/vendor/icons.svg#star"/></svg></template></span></td>
               <td>
                 <div class="name">
                   <span class="thumb" :class="{ empty: !l.has_photo }">
@@ -258,7 +271,6 @@
                 </div>
               </td>
               <td x-show="onLeads"><span class="st" :class="statusOf(l.status).id" x-text="statusOf(l.status).title"></span></td>
-              <td x-show="onLeads"><span class="prio" :class="'p' + (l.priority || 0)" x-text="priorityTitle(l.priority || 0)"></span></td>
               <td class="muted col-extra" x-text="l.district || '—'"></td>
               <td class="num col-extra"><span x-show="l.rating" class="rating" x-text="l.rating"></span><span x-show="!l.rating" class="muted">—</span></td>
               <td><span class="channel" :class="channelKind(l.channel)" x-text="channelLabel(l.channel)"></span></td>
@@ -346,6 +358,7 @@
       <a href="#docs-legal">7. Юрлицо и владелец ИП</a>
       <a href="#docs-export">8. Выгрузка и сохранённые папки</a>
       <a href="#docs-leads">9. Страница «Сохранённые лиды»: работа с лидом</a>
+      <a href="#docs-priority">10. Приоритет по карточке 2ГИС</a>
     </nav>
 
     <article class="panel" id="docs-search">
@@ -483,8 +496,11 @@
     <article class="panel" id="docs-leads">
       <h2>9. Страница «Сохранённые лиды»: работа с сохранённым лидом</h2>
       <p>«Сохранить лиды» на странице поиска кладёт лиды в папку кабинета, папки видны на странице «Сохранённые лиды». В таблице
-        папки напротив каждого лида — его статус и приоритет. Клик по заголовку «Приоритет» сортирует: сначала высокий,
-        потом низкий, третий клик возвращает порядок папки.</p>
+        папки напротив каждого лида — его статус и приоритет. Приоритет — до пяти звёзд внахлёст вплотную слева от
+        фото, сколько звёзд — такой приоритет; на странице поиска там же оценка по карточке (раздел 10). Переключатель
+        «Раскрасить по приоритету» над таблицей красит строки от холодного синего (1) через зелёный и янтарный к
+        оранжевому (5), строки без приоритета не красятся. Значок сортировки над звёздами сортирует: сначала высокий,
+        потом низкий, третий клик возвращает порядок.</p>
       <p>Карточка лида на обеих страницах устроена одинаково: под кнопками «Написать…», «Копировать сообщение» и
         «Открыть в 2ГИС» сразу идёт «Работа с клиентом», ниже — «Контакты», «Услуги», «Юрлицо». В «Работе с клиентом»
         на поиске — «Сообщение» и «Крючок». На странице «Сохранённые лиды» там же статус и приоритет, «Комментарий»,
@@ -493,7 +509,8 @@
         <li><b>Статус</b> — вручную: <span class="st client">Наш клиент</span> <span class="st waiting">Ожидаем ответ</span>
           <span class="st no_answer">Не ответил</span> <span class="st lost">Слился</span>. Новый лид —
           <span class="st new">Новый</span>; повторный клик по выбранному статусу снимает его.</li>
-        <li><b>Приоритет</b> — высокий, средний, низкий или нет.</li>
+        <li><b>Приоритет</b> — от 5 (очень высокий) до 1 (очень низкий) или «Нет». Новый лид получает его из оценки по
+          карточке 2ГИС (раздел 10), дальше его меняют вручную.</li>
         <li><b>Уже связались</b> — галочки напротив контактов из карточки: по каким уже связывались.</li>
         <li><b>Демо-приложение</b> — ссылка (только <code>http://</code> или <code>https://</code>) на демо, которое мы
           предлагаем лиду, с кнопками «Открыть демо» и «Копировать ссылку». Сейчас её вписывают вручную; в базе предусмотрена
@@ -506,6 +523,30 @@
       <p>Эти поля хранятся у лида в конкретной папке. Повторное сохранение того же лида из поиска обновляет его карточку,
         но не трогает статус, комментарий и остальное. В файлы выгрузки они <b>не попадают</b>: колонка «Статус» в
         <code>outreach.csv</code> — отдельная и заполняется при выгрузке как раньше.</p>
+    </article>
+
+    <article class="panel" id="docs-priority">
+      <h2>10. Приоритет по карточке 2ГИС</h2>
+      <p>Приоритет лида ставится автоматически по карточке 2ГИС, без запросов к сайтам фирм. Смотрим две вещи: есть ли у
+        фирмы свой сайт (соцсети и мессенджеры не в счёт) и куда ведёт кнопка «Забронировать» или «Записаться» в
+        карточке. Эта кнопка — рекламная функция 2ГИС и есть не у всех; она приходит вместе со страницей цен, которую
+        поиск и так загружает, поэтому лишних запросов нет.</p>
+      <ul>
+        <li><b>5 — очень высокий:</b> сайта нет, кнопка брони — звонок или мессенджер.</li>
+        <li><b>4 — высокий:</b> сайта нет и кнопки нет, или сайт есть, но кнопка брони — звонок.</li>
+        <li><b>3 — средний:</b> сайт есть, кнопки нет, или кнопка ведёт на обычную страницу сайта.</li>
+        <li><b>2 — низкий:</b> кнопка ведёт на страницу брони на сайте.</li>
+        <li><b>1 — очень низкий:</b> кнопка ведёт в сервис онлайн-брони (YCLIENTS, DIKIDI и другие) — услуга вряд ли нужна.</li>
+        <li><b>Нет:</b> данных о кнопке нет.</li>
+      </ul>
+      <p>К приоритету пишется пояснение, например «Сайта нет, кнопка «Забронировать» в 2ГИС — звонок». Оно видно в
+        «Работе с клиентом» как «Оценка по карточке 2ГИС». При сохранении в папку новый лид получает приоритет и
+        комментарий из оценки; лид, который уже был в папке, их не меняет. В файлы выгрузки оценка не попадает. Сайты
+        фирм не открываются, поэтому удобство брони на сайте не проверяется — это сказано в пояснении.</p>
+      <p><b>Временно:</b> у лидов, сохранённых раньше, оценки нет. Кнопка «Оценить лиды» на странице «Сохранённые лиды»
+        открывает Chrome на 2ГИС и оценивает лиды папки без оценки — по одному запросу на лид с паузой 2 секунды.
+        Приоритет и комментарий ставятся, только если они пустые. Если 2ГИС покажет капчу, оценка остановится; повторный
+        клик продолжит с неоценённых.</p>
     </article>
   </section>
   </main>
@@ -554,6 +595,13 @@
         <div class="block">
           <h3><button type="button" class="sec-btn" :aria-expanded="isOpen('work')" @click="toggleSection('work')"><span class="chev" aria-hidden="true"></span>Работа с клиентом</button></h3>
           <div class="sec-body" x-show="isOpen('work')">
+            <template x-if="card.assessment && card.assessment.priority">
+              <div class="assess">
+                <div class="sub-label">Оценка по карточке 2ГИС</div>
+                <p><span class="prio-stars" aria-hidden="true"><template x-for="n in (card.assessment.priority)" :key="n"><svg class="star" aria-hidden="true"><use href="/static/app/vendor/icons.svg#star"/></svg></template></span>
+                  <b x-text="priorityTitle(card.assessment.priority)"></b> · <span x-text="card.assessment.note"></span></p>
+              </div>
+            </template>
             <template x-if="onLeads && crm">
               <div class="work-head">
                 <div class="sub-label">Статус</div>
@@ -566,11 +614,14 @@
                 </div>
                 <p class="muted small" x-text="crm.status === 'new' ? 'Статус не выставлен — лид новый' : 'Повторный клик по статусу снимает его'"></p>
                 <div class="sub-label">Приоритет</div>
-                <div class="segmented" role="radiogroup" aria-label="Приоритет лида" @keydown="radioKeys($event)">
-                  <template x-for="pr in priorities" :key="pr.id">
-                    <button type="button" role="radio" :class="{ on: crm.priority === pr.id }" :aria-checked="crm.priority === pr.id"
-                            :disabled="crmBusy" @click="setPriority(pr.id)" x-text="pr.title"></button>
-                  </template>
+                <div class="prio-pick">
+                  <div class="segmented" role="radiogroup" aria-label="Приоритет лида" @keydown="radioKeys($event)">
+                    <template x-for="pr in priorities" :key="pr.id">
+                      <button type="button" role="radio" :class="{ on: crm.priority === pr.id }" :aria-checked="crm.priority === pr.id"
+                              :aria-label="pr.id ? `${pr.short}, ${pr.title.toLowerCase()}` : null" :title="pr.title" :disabled="crmBusy" @click="setPriority(pr.id)" x-text="pr.short"></button>
+                    </template>
+                  </div>
+                  <span class="muted small" x-text="priorityTitle(crm.priority)"></span>
                 </div>
               </div>
             </template>

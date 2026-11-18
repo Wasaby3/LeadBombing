@@ -18,7 +18,7 @@ def run_custom(base: pathlib.Path, monkeypatch) -> None:
     monkeypatch.setattr(writer_mod, 'date', _FixedDate)
     monkeypatch.setattr(writer_mod.urllib.request, 'urlopen', lambda url, timeout=0: _Resp())
     with LeadsWriter(str(base), sphere=get_sphere('custom', [MOSCOW], 'Баня')) as w:
-        w.fetch_state = lambda path, expr: data['prices'].get(path.split('/')[2])
+        w.fetch_state = lambda path, expr: {'prices': data['prices'].get(path.split('/')[2])}
         for item in data['items']:
             w.write({'result': {'items': [item]}})
 

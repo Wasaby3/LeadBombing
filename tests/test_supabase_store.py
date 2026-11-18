@@ -82,6 +82,29 @@ def test_folder_round_trip(token):
     assert store.folder_card(token, folder_id, 'zzz') is None
 
 
+def test_initial_work_is_set_only_for_leads_new_to_the_folder(token):
+    folder_id = store.create_folder(token, {'name': 'Оценка', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {}, 'prices': None},
+            'initial': {'priority': 5, 'comment': 'Сайта нет'}}
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b', 'initial': {}}])
+    assert [(r['priority']) for r in store.folder_leads(token, folder_id)] == [5, 0]
+    store.update_folder_lead(token, folder_id, 'a', {'priority': 1, 'comment': ''})
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'c'}])  # 'a' known, 'c' new: one request each
+    assert [(r['priority']) for r in store.folder_leads(token, folder_id)] == [0, 1, 5]
+    assert store.folder_card(token, folder_id, 'a')['crm']['comment'] == ''
+
+
+def test_assessment_of_old_leads_round_trip(token):  # TEMP: web/assess_job.py
+    folder_id = store.create_folder(token, {'name': 'Старые', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {'id': '7'}, 'prices': None}}
+    store.add_to_folder(token, folder_id, [lead])
+    assert store.folder_assess_rows(token, folder_id) == [
+        {'slug': 'a', 'card': {'row': {}}, 'item': {'id': '7'}, 'priority': 0, 'comment': ''}]
+    store.set_assessment(token, folder_id, 'a', {'card': {'row': {}, 'assessment': {'priority': 4}}, 'priority': 4})
+    assert store.folder_card(token, folder_id, 'a')['assessment'] == {'priority': 4}
+    assert store.folder_leads(token, folder_id)[0]['priority'] == 4
+
+
 def test_anonymous_requests_see_nothing():
     r = requests.get(f'{store._url}/rest/v1/leads', headers={'apikey': store._key}, timeout=10)
     assert r.status_code in (401, 403)
@@ -100,6 +123,7 @@ def test_folder_lead_work_round_trip(token):
     store.add_to_folder(token, folder_id, [lead])  # re-saving keeps the work
     assert store.folder_card(token, folder_id, 'a')['crm']['comment'] == 'да'
     assert store.folder_leads(token, folder_id)[1] == {'name': 'А', 'status': 'client', 'priority': 2}
+    assert store.update_folder_lead(token, folder_id, 'a', {'priority': 5})['priority'] == 5
 
     assert store.delete_folder_lead(token, folder_id, 'a') is True
     assert store.delete_folder_lead(token, folder_id, 'a') is False

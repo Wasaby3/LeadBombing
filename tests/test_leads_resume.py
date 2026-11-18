@@ -46,7 +46,7 @@ class PagedParser:
             time.sleep(CLOSE_DELAY_S)
 
     def parse(self, writer):
-        writer.fetch_state = lambda path, expr: DATA['prices'].get(path.split('/')[2])
+        writer.fetch_state = lambda path, expr: {'prices': DATA['prices'].get(path.split('/')[2])}
         m = re.search(r'/page/(\d+)', self.url)
         written = 0
         pages = range(int(m.group(1)) if m else 1, len(DATA['items']) // PAGE_SIZE + 2)

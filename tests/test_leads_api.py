@@ -12,6 +12,8 @@ import leadbombing.leads.writer as writer_mod
 
 
 class FakeParser:
+    booking: dict = {}  # firm id → its 2GIS ad actions (the «Забронировать» button); none by default
+
     def __init__(self, url, **kw):
         self.url = url
 
@@ -26,7 +28,8 @@ class FakeParser:
 
     def parse(self, writer):
         data = json.loads((FIXTURES / 'bani_items.json').read_text('utf-8'))
-        writer.fetch_state = lambda path, expr: data['prices'].get(path.split('/')[2])
+        writer.fetch_state = lambda path, expr: {'prices': data['prices'].get(path.split('/')[2]),
+                                                 'booking': self.booking.get(path.split('/')[2])}
         for item in data['items']:
             writer.write({'result': {'items': [item]}})
 

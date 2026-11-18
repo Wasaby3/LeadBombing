@@ -60,6 +60,10 @@ Writers get catalog-item documents through `writer.write(doc)`. `writer/factory.
     blocks. Without labels the choice is the old channel order, so goldens don't change.
   - `firm.py` also has `owner_of_ip` (owner's full name from «ИП …»).
   - `prices.py`: the prices-tab JS, price parsing, and the «old prices» threshold.
+  - `booking.py`: lead priority 0–5 from the 2GIS card (own site + where the «Забронировать» button leads). The
+    button is an ad action in `initialState.data.searchContext`, read by `LeadsWriter` in the same prices-tab request
+    (`FIRM_STATE_EXPR`); the result is `assessment` in the `lead` event and card, the raw actions are `raw.booking`.
+    Never exported. A lead new to a folder starts with this priority and its note as the comment.
   - `demo.py`: shared pieces of `business.json`/`leads.json` (legal, policy, theme, wordmark).
   - `text.py`: phones, transliteration, slugs.
   - `build.py` keeps the bathhouse-only parts (halls, schedule) plus `schedule_of`, which `generic.py` also uses.
@@ -76,6 +80,9 @@ Writers get catalog-item documents through `writer.write(doc)`. `writer/factory.
   - Saved lead folders («Сохранённые лиды»): `folders`, `folder_leads` (PK `folder_id, slug`; snapshot `summary`/`card`/`raw` plus the work on the lead: `status`, `priority`, `comment`, `contacted`, `demo_url`, `demo_source` (`manual`, later `auto`), `worked_at`). `folders_api.py` serves them (`PATCH`/`DELETE /api/folders/<id>/item/<slug>`); `lead_crm.py` `parse_patch` validates a change. Re-saving a lead upserts only the snapshot columns, so the work survives. These fields never go into export files.
 - Lead API routes live in two `register(app, load_cities)` modules: `leads_api.py` adds `/api/leads/*`, and `classic_api.py` adds the legacy dashboard's `/api/{start,status,results,download,history,…}` (`job.py` `ParseJob`, `history.py`).
 - `logs.py` `ListLogHandler` feeds both jobs' live logs.
+- TEMP `assess_job.py`: «Оценить лиды» on «Сохранённые лиды» assesses leads saved before `booking.py` existed
+  (Chrome on 2GIS, one request per lead with a 2 s pause, else captcha). Remove it with everything its docstring lists
+  once old folders are assessed.
 - `leads_job.py` `LeadsJob`: one run at a time on a background thread. For each selected city it builds a 2GIS search URL, runs the parser into a `LeadsWriter` staging base under `user_path(is_config=False)/runs/<timestamp>` (earlier runs are wiped), and collects events. The UI polls `/api/leads/status?cursor=N` (also `busy`, `resumable`, `params`). `stop()` marks the run stopped at once and closes Chrome on a side thread; `resume()` (`/api/leads/resume`) continues from the saved `Progress` (city, `MainParser.page`, firms done) with the same writer, which skips firms seen before via `skip_firm`; `clear()` (`/api/leads/clear`) wipes the run. `LeadsWriter.cancelled` turns an error during a stop into `RunCancelled` instead of a skipped firm. The search form is saved (localStorage and account `form`) only when a search is started or resumed (`searchForm` in `app.js`); unsent edits are reverted when the page changes or reloads. `export(target, slugs)` replays `raw` into the chosen folder and refuses a folder whose `outreach.csv` header belongs to another sphere.
 - Frontend: plain static files with no build step. Alpine.js, Motion and the Lucide icon sprite (`icons.svg`) are vendored in `static/app/vendor/`. Logic lives in `app.js`, layout in `index.html`, styles in `app.css`. `sw.js` is a network-first service worker that caches the shell. Bump `CACHE` in `sw.js` when the shell file list or the icon sprite changes.
 - `pick-folder` opens the native macOS folder dialog through `osascript`. Other platforms must type a path.
@@ -104,7 +111,8 @@ Golden tests compare output byte for byte against `tests/fixtures/*_golden/`. A 
 - `test_leads_golden.py` and `test_template_golden.py`: bathhouse and template-sphere (free search) leads output, with a fixed date of 2026-11-16 and a fake hero download.
 - `test_writers_golden.py`: CSV (plain and clean), JSON and HTML writers on `catalog_items.json`. That fixture is `bani_items.json` with the fields the catalog models require; the leads fixture is too thin for the writers.
 - `test_leads_api.py`, `test_dashboard_api.py`, `test_cli.py`: the leads API, the classic dashboard API and the CLI, each with a `FakeParser` replaying fixtures.
-- `test_spheres.py`, `test_leads.py`, `test_demo.py`, `test_web_logs.py`, `test_lead_crm.py`: unit tests.
+- `test_spheres.py`, `test_leads.py`, `test_demo.py`, `test_web_logs.py`, `test_lead_crm.py`, `test_booking.py`: unit tests.
+- `test_assess_job.py` (TEMP): assessment of old leads with a fake 2GIS.
 - `test_leads_resume.py`: instant stop, resume from the same city and page without repeats, clear (a paged `PagedParser` fake).
 - `test_folders_api.py`: saved lead folders («Сохранённые лиды»): save, card, export, the work on a lead (status, priority, comment,
   contacted, demo URL), re-save keeps it, delete with the photo.

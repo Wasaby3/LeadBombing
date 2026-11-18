@@ -101,6 +101,38 @@ def test_resaving_a_lead_keeps_its_work(client):
     assert (crm['status'], crm['comment']) == ('lost', 'не интересно')
 
 
+PHONE_BUTTON = [{'caption': 'Забронировать', 'type': 'phone', 'value': '+74991112570'}]
+
+
+def test_new_lead_gets_priority_and_comment_from_its_card(client, monkeypatch):
+    monkeypatch.setattr(FakeParser, 'booking', {'70000001007499623': PHONE_BUTTON, '70000001000000002': []})
+    folder_id = saved_folder(client)
+    found = client.get('/api/leads/status?cursor=0').get_json()['events']
+    assert {e['slug']: e['priority'] for e in found if e['type'] == 'lead'} == {
+        'usadba-bannaya': 5, 'hlebnikovskie-bani': 3}  # the search table shows the same assessment
+    leads = client.get(f'/api/folders/{folder_id}').get_json()['leads']
+    assert {lead['slug']: lead['priority'] for lead in leads} == {'usadba-bannaya': 5, 'hlebnikovskie-bani': 3}
+    card = client.get(f'/api/folders/{folder_id}/item/usadba-bannaya').get_json()
+    assert card['crm']['comment'] == 'Сайта нет, кнопка «Забронировать» в 2ГИС — звонок'
+    assert card['assessment']['button']['kind'] == 'phone'
+
+
+def test_lead_without_button_data_stays_without_priority(client):
+    folder_id = saved_folder(client)
+    crm = client.get(f'/api/folders/{folder_id}/item/usadba-bannaya').get_json()['crm']
+    assert (crm['priority'], crm['comment']) == (0, '')
+
+
+def test_resaving_keeps_a_priority_and_comment_set_by_hand(client, monkeypatch):
+    monkeypatch.setattr(FakeParser, 'booking', {'70000001007499623': PHONE_BUTTON})
+    folder_id = saved_folder(client)
+    item = f'/api/folders/{folder_id}/item/usadba-bannaya'
+    client.patch(item, json={'priority': 1, 'comment': ''})
+    client.post('/api/folders/save', json={'folder_id': folder_id})
+    crm = client.get(item).get_json()['crm']
+    assert (crm['priority'], crm['comment']) == (1, '')
+
+
 def test_bad_lead_change_is_refused(client):
     folder_id = saved_folder(client)
     item = f'/api/folders/{folder_id}/item/usadba-bannaya'

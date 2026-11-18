@@ -10,9 +10,9 @@ def test_default_is_a_new_lead_without_priority_or_demo():
 
 
 def test_accepts_known_fields_and_cleans_them():
-    patch = parse_patch({'status': 'client', 'priority': 3, 'comment': '  перезвонить в пятницу \n',
+    patch = parse_patch({'status': 'client', 'priority': 5, 'comment': '  перезвонить в пятницу \n',
                          'contacted': [{'title': 'WhatsApp', 'value': '+7 900 000-00-00'}]})
-    assert patch == {'status': 'client', 'priority': 3, 'comment': 'перезвонить в пятницу',
+    assert patch == {'status': 'client', 'priority': 5, 'comment': 'перезвонить в пятницу',
                      'contacted': [{'title': 'WhatsApp', 'value': '+7 900 000-00-00'}]}
 
 
@@ -32,7 +32,8 @@ def test_duplicate_contacts_are_kept_once():
     ({'nope': 1}, 'Неизвестное поле'),
     ({'demo_source': 'auto'}, 'Неизвестное поле'),  # only a future generator sets «auto», not the UI
     ({'status': 'won'}, 'Неизвестный статус'),
-    ({'priority': 4}, 'Приоритет'),
+    ({'priority': 6}, 'Приоритет'),
+    ({'priority': -1}, 'Приоритет'),
     ({'priority': True}, 'Приоритет'),
     ({'priority': '2'}, 'Приоритет'),
     ({'comment': 5}, 'Комментарий'),

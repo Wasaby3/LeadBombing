@@ -138,15 +138,24 @@ class SupabaseStore:
                  'count': r['folder_leads'][0]['count'] if r['folder_leads'] else 0} for r in rows]
 
     def add_to_folder(self, token: str, folder_id: int, leads: list[dict]) -> None:
-        """Insert leads ({slug, summary, card, raw}) in order; a lead already in the folder gets the new snapshot
-        and keeps the work on it (only the sent columns are merged)."""
+        """Insert leads ({slug, summary, card, raw, initial?}) in order; a lead already in the folder gets the new
+        snapshot and keeps the work on it (only the sent columns are merged). `initial` work fields (priority,
+        comment) are sent only for leads new to the folder."""
+        known = {r['slug'] for r in self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'slug', 'folder_id': f'eq.{folder_id}'})}
         base = datetime.now(timezone.utc)
-        rows = [{**lead, 'folder_id': folder_id, 'added_at': (base + timedelta(microseconds=i)).isoformat()}
+        rows = [{**{k: v for k, v in lead.items() if k != 'initial'},
+                 **({} if lead['slug'] in known else lead.get('initial') or {}),
+                 'folder_id': folder_id, 'added_at': (base + timedelta(microseconds=i)).isoformat()}
                 for i, lead in enumerate(leads)]
-        for start in range(0, len(rows), _FOLDER_CHUNK):
-            self._request('POST', '/rest/v1/folder_leads', token, json=rows[start:start + _FOLDER_CHUNK],
-                          params={'on_conflict': 'folder_id,slug'},
-                          prefer='resolution=merge-duplicates,return=minimal')
+        groups: dict[tuple[str, ...], list[dict]] = {}  # PostgREST wants the same columns in every row of a request
+        for row in rows:
+            groups.setdefault(tuple(sorted(row)), []).append(row)
+        for group in groups.values():
+            for start in range(0, len(group), _FOLDER_CHUNK):
+                self._request('POST', '/rest/v1/folder_leads', token, json=group[start:start + _FOLDER_CHUNK],
+                              params={'on_conflict': 'folder_id,slug'},
+                              prefer='resolution=merge-duplicates,return=minimal')
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         """Table rows in folder order, each with the lead's status and priority."""
@@ -177,6 +186,19 @@ class SupabaseStore:
         """[{slug, raw: {item, prices}}] in folder order, for export."""
         return self._request('GET', '/rest/v1/folder_leads', token, params={
             'select': 'slug,raw', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+
+    # --- TEMP: assessment of leads saved before the booking button was collected (web/assess_job.py) ---
+
+    def folder_assess_rows(self, token: str, folder_id: int) -> list[dict]:
+        """[{slug, card, item, priority, comment}] in folder order: what the assessment of old leads needs."""
+        return self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'slug,card,item:raw->item,priority,comment', 'folder_id': f'eq.{folder_id}',
+            'order': 'added_at.asc'})
+
+    def set_assessment(self, token: str, folder_id: int, slug: str, fields: dict) -> None:
+        """Save a lead's assessed card (and priority, comment when given); not the user's work, so no worked_at."""
+        self._request('PATCH', '/rest/v1/folder_leads', token, json=fields,
+                      params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}'}, prefer='return=minimal')
 
     # --- HTTP ---
 

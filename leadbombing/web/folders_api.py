@@ -60,13 +60,22 @@ def _merge_cities(old: list[dict], new: list[dict]) -> list[dict]:
     return old + [c for c in new if c['code'] not in known]
 
 
+def initial_work(card: dict) -> dict:
+    """Work fields a lead new to a folder starts with: the priority and note assessed from its 2GIS card."""
+    assessment = card.get('assessment') or {}
+    if not assessment.get('priority'):
+        return {}
+    return {'priority': assessment['priority'], 'comment': assessment['note']}
+
+
 def _folder_leads(job: LeadsJob, raw: list[dict]) -> list[dict]:
-    """Folder rows for the job's firms: table row, card and raw firm data for export."""
+    """Folder rows for the job's firms: table row, card, raw firm data for export and the work a new lead starts with."""
     summaries = {e['slug']: e for e in job.events if e['type'] == 'lead'}
     return [{'slug': r['slug'],
              'summary': {**{k: v for k, v in summaries[r['slug']].items() if k != 'type'}, 'has_photo': bool(r['hero'])},
              'card': job.results[r['slug']],
-             'raw': {'item': r['item'], 'prices': r['prices']}}
+             'raw': {'item': r['item'], 'prices': r['prices'], 'booking': r.get('booking')},
+             'initial': initial_work(job.results[r['slug']])}
             for r in raw if r['slug'] in summaries and r['slug'] in job.results]
 
 

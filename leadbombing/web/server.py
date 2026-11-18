@@ -12,6 +12,7 @@ from ..logger import logger
 from ..paths import data_path, user_path
 from .account import Accounts
 from .account_api import register as register_account
+from .assess_job import register as register_assess
 from .auth import register as register_auth
 from .classic_api import register as register_classic
 from .folders_api import register as register_folders
@@ -62,7 +63,9 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
                       SESSION_COOKIE_SAMESITE='Lax', PERMANENT_SESSION_LIFETIME=timedelta(days=_SESSION_DAYS))
     register_auth(app, Accounts(store or store_from_env()))
     register_account(app)
-    register_folders(app, register_leads(app, _load_cities))
+    leads_job = register_leads(app, _load_cities)
+    register_folders(app, leads_job)
+    register_assess(app, lambda: leads_job.running)  # TEMP: assessment of old leads, see assess_job.py
     register_classic(app, _load_cities)
 
     @app.route('/')

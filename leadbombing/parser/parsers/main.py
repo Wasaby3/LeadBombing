@@ -19,6 +19,32 @@ if TYPE_CHECKING:
     from ..options import ParserOptions
 
 
+def fetch_state(remote: ChromeRemote, path: str, expr: str = 's') -> Any:
+    """Load a 2GIS page in the remote's current tab (already on a 2GIS page) and evaluate `expr` over its
+    server-rendered `initialState` `s`.
+
+    2GIS no longer requests `items/byid` on click, and the search page state lacks contacts,
+    so firm data (and the prices tab) are taken from the pages' own `initialState`.
+    """
+    data = remote.execute_script('''(() => {
+        const x = new XMLHttpRequest();
+        x.open('GET', %s, false);
+        x.send();
+        if (x.status !== 200) return JSON.stringify({__http: x.status});
+        const m = x.responseText.match(/var initialState = JSON\\.parse\\('((?:[^'\\\\]|\\\\.)*)'\\)/);
+        if (!m) return JSON.stringify({__http: 'no-state'});
+        const s = JSON.parse(Function("return '" + m[1] + "'")());
+        return JSON.stringify((%s) ?? null);
+    })()''' % (json.dumps(path), expr))
+    value = json.loads(data) if data else None
+    if isinstance(value, dict) and '__http' in value:
+        if value['__http'] in (403, 429, 'no-state'):  # blocked or captcha page instead of 2GIS data
+            raise ParserException(f'2ГИС не отдал данные ({value["__http"]}) для {path} — '
+                                  f'похоже на капчу или блокировку, прогон остановлен.')
+        return None
+    return value
+
+
 class MainParser:
     """Main parser that extracts useful payload
     from search result pages using Chrome browser
@@ -53,28 +79,8 @@ class MainParser:
         self._chrome_remote.add_blocked_requests(blocked_urls)
 
     def _fetch_state(self, path: str, expr: str = 's') -> Any:
-        """Load a 2GIS page in the current tab and evaluate `expr` over its server-rendered `initialState` `s`.
-
-        2GIS no longer requests `items/byid` on click, and the search page state lacks contacts,
-        so firm data (and the prices tab) are taken from the pages' own `initialState`.
-        """
-        data = self._chrome_remote.execute_script('''(() => {
-            const x = new XMLHttpRequest();
-            x.open('GET', %s, false);
-            x.send();
-            if (x.status !== 200) return JSON.stringify({__http: x.status});
-            const m = x.responseText.match(/var initialState = JSON\\.parse\\('((?:[^'\\\\]|\\\\.)*)'\\)/);
-            if (!m) return JSON.stringify({__http: 'no-state'});
-            const s = JSON.parse(Function("return '" + m[1] + "'")());
-            return JSON.stringify((%s) ?? null);
-        })()''' % (json.dumps(path), expr))
-        value = json.loads(data) if data else None
-        if isinstance(value, dict) and '__http' in value:
-            if value['__http'] in (403, 429, 'no-state'):  # blocked or captcha page instead of 2GIS data
-                raise ParserException(f'2ГИС не отдал данные ({value["__http"]}) для {path} — '
-                                      f'похоже на капчу или блокировку, прогон остановлен.')
-            return None
-        return value
+        """`fetch_state` in this parser's tab."""
+        return fetch_state(self._chrome_remote, path, expr)
 
     def _get_state_item(self, firm_id: str) -> dict | None:
         """Get catalog item document of a firm, wrapped as an API response."""
