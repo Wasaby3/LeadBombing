@@ -1,5 +1,5 @@
 """Contacts of a 2GIS card: every contact kept, labels as in 2GIS (or a default), the owner first."""
-from leadbombing.leads.contacts import business_contacts, contact_book, contacts_of, reach_of
+from leadbombing.leads.contacts import business_contacts, contact_book, contacts_of, owner_mark, reach_of
 from leadbombing.leads.firm import owner_of_ip
 
 
@@ -179,3 +179,31 @@ def test_owner_of_ip():
     assert owner_of_ip('ИП  Сидоров  Пётр  Ильич ') == 'Сидоров Пётр Ильич'
     assert owner_of_ip('ООО Усадьба') is None
     assert owner_of_ip('') is None and owner_of_ip(None) is None
+
+
+def _book(*contacts):
+    return contact_book(_item(_group(*contacts)), 'для записи')
+
+
+def test_owner_mark_owner_label_wins():
+    book = _book({'type': 'phone', 'value': '+74951112233', 'comment': 'директор'},
+                 {'type': 'phone', 'value': '+79161112233'})
+    assert owner_mark(book, is_ip=True) == 'owner'
+
+
+def test_owner_mark_single_mobile_is_maybe():
+    assert owner_mark(_book({'type': 'phone', 'value': '+79161112233'}), is_ip=False) == 'maybe'
+
+
+def test_owner_mark_ip_with_several_phones_is_maybe():
+    book = _book({'type': 'phone', 'value': '+74951112233'}, {'type': 'phone', 'value': '+79161112233'})
+    assert owner_mark(book, is_ip=True) == 'maybe'
+    assert owner_mark(book, is_ip=False) == ''
+
+
+def test_owner_mark_skips_city_and_booking_numbers():
+    assert owner_mark(_book({'type': 'phone', 'value': '+74951112233'}), is_ip=True) == ''
+    booking = _book({'type': 'phone', 'value': '+79161112233'})
+    booking = [{**booking[0], 'role': 'booking'}]
+    assert owner_mark(booking, is_ip=True) == ''
+    assert owner_mark([], is_ip=True) == ''

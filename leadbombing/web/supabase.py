@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 import requests
 
+from ..leads.contacts import card_owner_mark
 from ..logger import logger
 from .lead_crm import CRM_FIELDS, crm_of
 
@@ -160,8 +161,10 @@ class SupabaseStore:
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         """Table rows in folder order, each with the lead's status and priority."""
         rows = self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'summary,status,priority', 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
-        return [{**r['summary'], 'status': r['status'], 'priority': r['priority']} for r in rows]
+            'select': 'summary,status,priority,contacts:card->contacts,legal:card->legal',  # not the whole card
+            'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+        return [{**r['summary'], 'status': r['status'], 'priority': r['priority'], 'owner': card_owner_mark(r)}
+                for r in rows]
 
     def folder_card(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
         """The lead card with the work on it (`crm`), or None."""

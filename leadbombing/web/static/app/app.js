@@ -20,6 +20,8 @@ const PRIORITIES = [{ id: 5, short: '5', title: 'Очень высокий', ico
   { id: 2, short: '2', title: 'Низкий', icon: 'cloud' }, { id: 1, short: '1', title: 'Очень низкий', icon: 'snowflake' },
   { id: 0, short: 'Нет', title: 'Не задан', icon: 'circle-dashed' }];
 const SORT_NEXT = { '': 'desc', desc: 'asc', asc: '' };  // priority column: high first, low first, folder order
+const OWNER_RANK = { owner: 2, maybe: 1 };  // row.owner from leads/contacts.py owner_mark
+const OWNER_TITLES = { owner: 'Есть контакт руководителя', maybe: 'Возможно, номер владельца' };
 /* Lead card sections, top to bottom; «Работа с клиентом» holds the sub-sections. All open when a lead is opened. */
 const SECTIONS = ['contacts', 'prices', 'legal', 'work'];
 const SUB_SECTIONS = ['channels', 'demo', 'message', 'hook', 'comment'];
@@ -28,6 +30,18 @@ const CUSTOM = { id: 'custom', title: 'Свободный поиск', query: ''
 const STATUS_TEXT = { idle: 'Не запущен', running: 'Идёт поиск', done: 'Поиск завершён', stopped: 'Поиск остановлен',
   error: 'Поиск прерван' };
 const NO_FORM_ERROR = { field: '', text: '' };
+
+/* A guess, not a fact: the first unlabelled mobile phone is likely the owner's when the firm is an ИП or the card
+   has no other phone. Skipped when 2GIS already names a director/owner contact. Adds likelyOwner (the reason). */
+const isPhone = (c) => c.type ? c.type === 'phone' : c.title === 'Телефон'; // old cards have no type
+const isMobilePhone = (c) => /^79\d{9}$/.test(c.value.replace(/\D/g, ''));
+function markLikelyOwner(contacts, isIp) {
+  if (contacts.some((c) => c.role === 'owner')) return contacts;
+  const phones = contacts.filter(isPhone);
+  const reason = isIp ? 'мобильный · юрлицо ИП' : phones.length === 1 ? 'мобильный · единственный номер' : '';
+  const pick = reason && phones.find((c) => isMobilePhone(c) && c.role === 'general');
+  return pick ? contacts.map((c) => (c === pick ? { ...c, likelyOwner: reason } : c)) : contacts;
+}
 
 /* Russian plural: plural(5, ['лид', 'лида', 'лидов']) → 'лидов'. */
 function plural(n, [one, few, many]) {
@@ -134,7 +148,7 @@ document.addEventListener('alpine:init', () => {
     tintRows: store.get(TINT_KEY, true),
     assess: null, assessPolling: false,  // TEMP: assessment of old leads (assess_job.py)
     saveOpen: false, saving: false, saveForm: { mode: 'new', name: '', folderId: null },
-    statuses: STATUSES, priorities: PRIORITIES, prioritySort: '',
+    statuses: STATUSES, priorities: PRIORITIES, prioritySort: '', ownerSort: false,
     crm: null, draft: { comment: '', demoUrl: '' }, crmBusy: false, deleteOpen: false, collapsed: {},
 
     async init() {
@@ -219,6 +233,7 @@ document.addEventListener('alpine:init', () => {
       this.picked = [];
       this.filter = '';
       this.prioritySort = '';
+      this.ownerSort = false;
       this.closeCard();
       if (page === 'leads') this.loadFolders();
     },
@@ -429,9 +444,11 @@ document.addEventListener('alpine:init', () => {
     get visible() {
       const q = this.filter.trim().toLowerCase();
       const found = q ? this.list.filter((l) => `${l.name} ${l.district}`.toLowerCase().includes(q)) : this.list;
-      if (!this.prioritySort) return found;
+      if (!this.prioritySort && !this.ownerSort) return found;
       const sign = this.prioritySort === 'desc' ? -1 : 1;
-      return [...found].sort((a, b) => sign * ((a.priority || 0) - (b.priority || 0)));  // stable: ties keep folder order
+      const byPriority = (a, b) => (this.prioritySort ? sign * ((a.priority || 0) - (b.priority || 0)) : 0);
+      const byOwner = (a, b) => (this.ownerSort ? (OWNER_RANK[b.owner] || 0) - (OWNER_RANK[a.owner] || 0) : 0);
+      return [...found].sort((a, b) => byPriority(a, b) || byOwner(a, b));  // stable: ties keep folder order
     },
     get skippedByReason() {
       const counts = {};
@@ -689,6 +706,7 @@ document.addEventListener('alpine:init', () => {
     priorityIcon(id) { return `/static/app/vendor/icons.svg#${PRIORITIES.find((p) => p.id === (id || 0))?.icon || 'circle-dashed'}`; },
     priorityLabel(id) { return id ? `Приоритет: ${this.priorityTitle(id).toLowerCase()} (${id} из 5)` : 'Приоритет не задан'; },
     sortByPriority() { this.prioritySort = SORT_NEXT[this.prioritySort]; },
+    ownerTitle(mark) { return OWNER_TITLES[mark] || ''; },
     get prioritySortTitle() {
       return { '': 'Сортировать по приоритету', desc: 'Сначала высокий приоритет', asc: 'Сначала низкий приоритет' }[this.prioritySort];
     },
@@ -766,7 +784,9 @@ document.addEventListener('alpine:init', () => {
        labels existed only have the exported contacts: they are shown without labels. */
     get cardContacts() {
       if (!this.card) return [];
-      if (this.card.contacts) return this.card.contacts;
+      return markLikelyOwner(this.card.contacts || this.oldCardContacts(), !!this.cardLegal.owner);
+    },
+    oldCardContacts() {
       const c = this.card.lead.contact || {};
       const rows = [];
       if (c.whatsapp) rows.push(['WhatsApp', c.whatsapp]);

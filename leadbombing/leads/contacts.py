@@ -176,6 +176,29 @@ def contact_book(item: dict, booking_label: str) -> list[dict[str, Any]]:
     return sorted(book, key=lambda c: ROLE_ORDER.index(c['role']))
 
 
+MARK_OWNER = 'owner'  # 2GIS labels a contact as the director/owner
+MARK_MAYBE = 'maybe'  # a guess: a general mobile phone of a sole trader, or the card's only phone
+
+
+def owner_mark(book: list[dict], is_ip: bool) -> str:
+    """'owner', 'maybe' or '' for the leads table (from `contact_book` and whether the firm is an ИП).
+
+    Keep in sync with `markLikelyOwner` in web/static/app/app.js, which marks the very phone in the lead card.
+    """
+    if any(c.get('role') == ROLE_OWNER for c in book):
+        return MARK_OWNER
+    phones = [c for c in book if c.get('type') == 'phone']
+    if not (is_ip or len(phones) == 1):
+        return ''
+    found = any(is_mobile(c.get('value') or '') and c.get('role') == ROLE_GENERAL for c in phones)
+    return MARK_MAYBE if found else ''
+
+
+def card_owner_mark(card: dict) -> str:
+    """`owner_mark` of a lead card or `lead` event (its `contacts` and `legal`); '' for cards saved before them."""
+    return owner_mark(card.get('contacts') or [], bool((card.get('legal') or {}).get('owner')))
+
+
 def _roles(book: Iterable[dict]) -> dict[tuple[str, str], str]:
     return {_key(c['type'], c['value']): c['role'] for c in book}
 

@@ -92,6 +92,27 @@ def test_lead_work_is_saved_shown_in_list_and_card(client):
     assert (leads[0]['slug'], leads[0]['status'], leads[0]['priority']) == ('usadba-bannaya', 'client', 3)
 
 
+def test_owner_crown_is_shown_in_search_and_folder_rows(client, monkeypatch):
+    # Arrange: «Усадьба Банная» becomes a sole trader; its mobile is then likely the owner's
+    real = writer_mod.card_details
+
+    def as_ip(item, sphere):
+        details = real(item, sphere)
+        is_usadba = 'Усадьба' in details['legal']['name']
+        return {**details, 'legal': {**details['legal'], 'owner': 'Иванов Иван'}} if is_usadba else details
+    monkeypatch.setattr(writer_mod, 'card_details', as_ip)
+
+    # Act
+    folder_id = saved_folder(client)
+
+    # Assert
+    found = client.get('/api/leads/status?cursor=0').get_json()['events']
+    expected = {'usadba-bannaya': 'maybe', 'hlebnikovskie-bani': ''}  # the second has only a city number
+    assert {e['slug']: e['owner'] for e in found if e['type'] == 'lead'} == expected
+    leads = client.get(f'/api/folders/{folder_id}').get_json()['leads']
+    assert {lead['slug']: lead['owner'] for lead in leads} == expected
+
+
 def test_resaving_a_lead_keeps_its_work(client):
     folder_id = saved_folder(client, ['usadba-bannaya'])
     item = f'/api/folders/{folder_id}/item/usadba-bannaya'

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from ..config import Configuration
 from ..leads import LeadsWriter
+from ..leads.contacts import card_owner_mark
 from ..leads.writer import CARD_KEYS
 from ..leads.spheres import get_sphere
 from ..logger import logger
@@ -43,7 +44,8 @@ def lead_summary(event: dict) -> dict[str, Any]:
             'rating': lead.get('rating'), 'reviews': lead.get('reviews'), 'channel': row.get('Канал'),
             'write_here': row.get('Писать сюда'), 'has_photo': bool(lead['photos'].get('hero_url')),
             'prices': names, 'updated': event.get('updated', False),
-            'priority': (event.get('assessment') or {}).get('priority', 0)}  # from the 2GIS card, see leads/booking.py
+            'priority': (event.get('assessment') or {}).get('priority', 0),  # from the 2GIS card, see leads/booking.py
+            'owner': card_owner_mark(event)}  # crown on the photo: 'owner' | 'maybe' | ''
 
 
 @dataclass(frozen=True)

@@ -77,7 +77,7 @@ def test_folder_round_trip(token):
     assert (folder['name'], folder['count'], len(folder['cities'])) == ('Тест', 2, 2)
     assert store.get_folder(token, folder_id)['query'] == 'бани'
     assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b', 'a']
-    assert store.folder_leads(token, folder_id) == [{'name': 'А', 'status': 'new', 'priority': 0}] * 2
+    assert store.folder_leads(token, folder_id) == [{'name': 'А', 'status': 'new', 'priority': 0, 'owner': ''}] * 2
     assert store.folder_card(token, folder_id, 'a')['row'] == {'Название': 'А2'}
     assert store.folder_card(token, folder_id, 'zzz') is None
 
@@ -122,7 +122,7 @@ def test_folder_lead_work_round_trip(token):
     assert store.update_folder_lead(token, folder_id, 'zzz', {'status': 'lost'}) is None
     store.add_to_folder(token, folder_id, [lead])  # re-saving keeps the work
     assert store.folder_card(token, folder_id, 'a')['crm']['comment'] == 'да'
-    assert store.folder_leads(token, folder_id)[1] == {'name': 'А', 'status': 'client', 'priority': 2}
+    assert store.folder_leads(token, folder_id)[1] == {'name': 'А', 'status': 'client', 'priority': 2, 'owner': ''}
     assert store.update_folder_lead(token, folder_id, 'a', {'priority': 5})['priority'] == 5
 
     assert store.delete_folder_lead(token, folder_id, 'a') is True

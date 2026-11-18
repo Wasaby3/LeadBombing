@@ -6,6 +6,7 @@ import itertools
 import time
 from typing import Any, Optional
 
+from leadbombing.leads.contacts import card_owner_mark
 from leadbombing.web.lead_crm import DEFAULT_CRM, crm_of
 from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError
 
@@ -129,8 +130,8 @@ class FakeStore:
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
-        return [{**copy.deepcopy(r['summary']), 'status': r['status'], 'priority': r['priority']}
-                for r in self.folder_items.get(folder_id, {}).values()]
+        return [{**copy.deepcopy(r['summary']), 'status': r['status'], 'priority': r['priority'],
+                 'owner': card_owner_mark(r['card'])} for r in self.folder_items.get(folder_id, {}).values()]
 
     def folder_card(self, token: str, folder_id: int, slug: str) -> Optional[dict]:
         self._check(token)

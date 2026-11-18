@@ -282,9 +282,19 @@ tbody tr:hover, tbody tr.active { background: var(--surface-2); }
 .row-open:hover { color: var(--accent); }
 /* The row checkbox: the whole cell is the hit area, not the 15px box */
 .pick-hit { display: grid; place-items: center; min-width: 32px; min-height: 32px; margin: -6px -4px; cursor: pointer; }
-.thumb { width: 34px; height: 34px; border-radius: 8px; overflow: hidden; flex: none; background: var(--surface-2);
+.thumb { position: relative; width: 34px; height: 34px; border-radius: 8px; overflow: hidden; flex: none; background: var(--surface-2);
   display: grid; place-items: center; font-size: 11px; font-weight: 650; color: var(--muted); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* Crown on the photo: filled — 2GIS names a director/owner contact, outline — a likely owner's mobile */
+.thumb-crown { position: absolute; right: 1px; bottom: 1px; display: grid; place-items: center; width: 15px; height: 15px;
+  border-radius: 5px; background: var(--surface); color: var(--owner); box-shadow: 0 0 0 1px color-mix(in srgb, var(--owner) 45%, transparent); }
+.thumb-crown .crown { width: 11px; height: 11px; }
+.thumb-crown.maybe .crown { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linejoin: round; }
+.thumb-crown.owner { background: var(--owner); color: var(--surface); box-shadow: none; }
+.owner-sort { margin-left: 6px; vertical-align: middle; color: var(--muted); }
+.owner-sort .crown { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.owner-sort.on { color: var(--owner); }
+.owner-sort.on .crown { fill: currentColor; }
 .rating { font-weight: 600; }
 .rating::before { content: "★ "; color: #f5a524; }
 .channel { --c: var(--muted); display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px;
@@ -351,6 +361,9 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .owner-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px;
   font-size: 11.5px; font-weight: 650; color: var(--owner); background: color-mix(in srgb, var(--owner) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--owner) 35%, transparent); white-space: nowrap; }
+.owner-badge.maybe { font-weight: 550; background: transparent; border-style: dashed;
+  border-color: color-mix(in srgb, var(--owner) 55%, transparent); }
+.owner-badge.maybe .crown { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .crown { width: 13px; height: 13px; fill: currentColor; }
 .legal-owner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
