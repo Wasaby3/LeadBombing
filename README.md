@@ -4,7 +4,7 @@
 собирает фирмы из выдачи и выгружает их в папку: `leads.json`, `outreach.csv`, `tenants/<slug>/business.json` + фото.
 Внешних сервисов нет — только Python, Chrome, 2ГИС и локальный Supabase (аккаунты) в Docker.
 
-<img alt="Скриншот" src="docs/screenshot.png"/>
+<img alt="Скриншот" src="docs/screenshot.webp"/>
 
 ## Возможности
 
