@@ -94,15 +94,30 @@ def test_initial_work_is_set_only_for_leads_new_to_the_folder(token):
     assert store.folder_card(token, folder_id, 'a')['crm']['comment'] == ''
 
 
-def test_assessment_of_old_leads_round_trip(token):  # TEMP: web/assess_job.py
-    folder_id = store.create_folder(token, {'name': 'Старые', 'sphere': SPHERE, 'query': '', 'cities': []})
-    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {'id': '7'}, 'prices': None}}
-    store.add_to_folder(token, folder_id, [lead])
-    assert store.folder_assess_rows(token, folder_id) == [
-        {'slug': 'a', 'card': {'row': {}}, 'item': {'id': '7'}, 'priority': 0, 'comment': ''}]
-    store.set_assessment(token, folder_id, 'a', {'card': {'row': {}, 'assessment': {'priority': 4}}, 'priority': 4})
-    assert store.folder_card(token, folder_id, 'a')['assessment'] == {'priority': 4}
-    assert store.folder_leads(token, folder_id)[0]['priority'] == 4
+def test_folder_firms_maps_firm_ids_to_slugs(token):
+    folder_id = store.create_folder(token, {'name': 'Сеть', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {'id': '7_x'}, 'prices': None}}
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b', 'raw': {'item': {'id': '8'}, 'prices': None}}])
+    store.make_client(token, folder_id, 'b')  # a client keeps its slug too
+    assert store.folder_firms(token, folder_id) == {'7': 'a', '8': 'b'}
+
+
+def test_fill_demo_urls_round_trip(token):
+    folder_id = store.create_folder(token, {'name': 'Демо', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {}, 'prices': None}}
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b'}, {**lead, 'slug': 'c'}])
+    store.update_folder_lead(token, folder_id, 'b', {'demo_url': 'https://my.example/b', 'demo_source': 'manual'})
+    store.make_client(token, folder_id, 'c')
+
+    assert store.fill_demo_urls(token, folder_id, 'https://demo.example/s', None) == {'filled': 1, 'kept': 1}
+
+    assert store.folder_card(token, folder_id, 'a')['crm']['demo_url'] == 'https://demo.example/s/a'
+    assert store.folder_card(token, folder_id, 'b')['crm']['demo_url'] == 'https://my.example/b'
+    assert store.folder_card(token, folder_id, 'c')['crm']['demo_url'] is None
+    folder = store.get_folder(token, folder_id)
+    assert folder['demo_base_url'] == 'https://demo.example/s' and folder['demo_filled_at']
+    assert store.fill_demo_urls(token, folder_id, 'https://new.example', ['b']) == {'filled': 0, 'kept': 1}
+    assert store.folder_card(token, folder_id, 'a')['crm']['demo_url'] == 'https://demo.example/s/a'
 
 
 def test_anonymous_requests_see_nothing():
@@ -144,7 +159,6 @@ def test_client_round_trip(token):
     store.add_to_folder(token, folder_id, [lead])  # re-saving keeps it a client
     assert [r['name'] for r in store.folder_leads(token, folder_id)] == ['А']
     assert [r['slug'] for r in store.folder_raw(token, folder_id)] == ['b']
-    assert [r['slug'] for r in store.folder_assess_rows(token, folder_id)] == ['b']
     assert next(f for f in store.list_folders(token) if f['id'] == folder_id)['count'] == 1
     mine = [c for c in store.list_clients(token) if c['folder_id'] == folder_id]
     assert [(c['slug'], c['name'], c['folder'], c['client_status'], c['status'], c['owner']) for c in mine] == [

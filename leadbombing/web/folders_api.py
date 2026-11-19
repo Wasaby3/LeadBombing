@@ -9,10 +9,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from ..leads.firm import firm_id
 from ..leads.spheres import get_sphere
 from ..logger import logger
 from ..paths import user_path
 from .leads_api import _SLUG_RE, export_args, run_export, slugs_arg
+from .folder_slugs import folder_slugs, with_slug
 from .lead_crm import parse_patch
 from .leads_job import LeadsJob, export_raw
 from .supabase import SessionExpired, StoreError
@@ -135,8 +137,10 @@ def register(app: Any, job: LeadsJob) -> None:
                 cities = _merge_cities(target['cities'], sphere.cities)
                 if cities != target['cities']:
                     store.update_folder(token, folder_id, {'cities': cities})
-            store.add_to_folder(token, target['id'], leads)
-            _store_heroes(target['id'], raw)
+            slugs = folder_slugs(store.folder_firms(token, target['id']),
+                                 [(r['slug'], firm_id(r['item'])) for r in raw])
+            store.add_to_folder(token, target['id'], [with_slug(lead, slugs[lead['slug']]) for lead in leads])
+            _store_heroes(target['id'], [{**r, 'slug': slugs[r['slug']]} for r in raw])
             return jsonify({'ok': True, 'folder': {'id': target['id'], 'name': target['name']}, 'saved': len(leads)})
         return with_store(save)
 
@@ -208,5 +212,5 @@ def register(app: Any, job: LeadsJob) -> None:
             raw = [{**r['raw'], 'slug': r['slug'], 'hero': _read_hero(folder_id, r['slug'])}
                    for r in store.folder_raw(token, folder_id) if wanted is None or r['slug'] in wanted]
             sphere = get_sphere(folder['sphere'], folder['cities'], folder['query'])
-            return run_export(lambda: export_raw(target, sphere, raw))
+            return run_export(lambda: export_raw(target, sphere, raw, keep_slugs=True))
         return with_store(export)

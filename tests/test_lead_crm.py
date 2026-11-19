@@ -1,7 +1,7 @@
 """Work on a saved lead (status, priority, comment, contact channels, demo app): validation of a change."""
 import pytest
 
-from leadbombing.web.lead_crm import DEFAULT_CRM, MAX_COMMENT, parse_patch
+from leadbombing.web.lead_crm import DEFAULT_CRM, MAX_COMMENT, parse_base_url, parse_patch
 
 
 def test_default_is_a_lead_not_written_to_without_priority_or_demo():
@@ -63,3 +63,19 @@ def test_duplicate_contacts_are_kept_once():
 def test_rejects_bad_values_with_russian_message(data, message):
     with pytest.raises(ValueError, match=message):
         parse_patch(data)
+
+
+@pytest.mark.parametrize('value, url', [
+    (' https://demo.example.ru/s/ ', 'https://demo.example.ru/s'),
+    ('HTTPS://Demo.example.ru', 'https://Demo.example.ru'),
+    ('http://localhost:3000//', 'http://localhost:3000'),
+])
+def test_base_url_loses_the_trailing_slash_and_gets_a_lower_case_scheme(value, url):
+    assert parse_base_url(value) == url
+
+
+@pytest.mark.parametrize('value', [None, 5, '', '   ', 'demo.example.ru', 'https://', 'ftp://demo.example.ru',
+                                   'https://demo.example.ru/?a=1', 'https://demo.example.ru/#x', 'https://a b.ru'])
+def test_bad_base_url_is_refused(value):
+    with pytest.raises(ValueError):
+        parse_base_url(value)

@@ -1,6 +1,7 @@
 /* LeadBombing PWA: login, side menu pages (search, leads, clients, profile, settings, docs), search form, live leads
    table, saved lead folders («Сохранённые лиды»), clients («Клиенты»), lead card, export. Alpine.js + Motion.
-   The work on a saved lead or client (statuses, priority, comment, demo, «Перевести в клиенты») is in crm.js. */
+   The work on a saved lead or client (statuses, priority, comment, demo, «Перевести в клиенты») is in crm.js,
+   «Проработать лиды» (demo URLs of a folder's leads) in work.js. */
 const POLL_MS = 900;
 const SAVE_SETTINGS_MS = 800;
 const TOAST_MS = 2600;
@@ -53,7 +54,7 @@ const focusablesIn = (root) => [...root.querySelectorAll(FOCUSABLE)].filter(isVi
 /* flag → [window ref, fallback ref for the return when the opener is gone (e.g. a closed menu)] */
 const WINDOWS = {
   selected: ['card', null], deleteOpen: ['deleteDialog', null], clearOpen: ['clearDialog', 'moreBtn'],
-  exportOpen: ['exportDialog', null], saveOpen: ['saveDialog', null],
+  exportOpen: ['exportDialog', null], saveOpen: ['saveDialog', null], workOpen: ['workDialog', null],
 };
 
 function loadForm(saved = store.get(FORM_KEY, {})) {
@@ -141,7 +142,6 @@ document.addEventListener('alpine:init', () => {
     page: pageFromPath(), theme: store.get(THEME_KEY, ''), systemDark: DARK_QUERY.matches, themeChoices: THEME_CHOICES,
     folders: [], folderId: null, folderLeads: [],
     tintRows: store.get(TINT_KEY, true),
-    assess: null, assessPolling: false,  // TEMP: assessment of old leads (assess_job.py)
     saveOpen: false, saving: false, saveForm: { mode: 'new', name: '', folderId: null },
     prioritySort: '', ownerSort: false, collapsed: {},
 
@@ -248,7 +248,6 @@ document.addEventListener('alpine:init', () => {
       const keep = this.folders.some((f) => f.id === this.folderId);
       const id = keep ? this.folderId : this.folders[0]?.id;
       if (id) await this.showFolder(id); else this.folderLeads = [];
-      this.checkAssess();
     },
     async showFolder(id) {
       this.folderId = id;
@@ -263,57 +262,6 @@ document.addEventListener('alpine:init', () => {
     },
     get folder() { return this.folders.find((f) => f.id === this.folderId); },
 
-    /* TEMP: one-off assessment of leads saved before the 2GIS «Забронировать» button was collected (assess_job.py).
-       Remove with the «Оценить лиды» button in index.html once old folders are assessed. */
-    get assessing() { return this.assess?.status === 'running'; },
-    get assessLabel() { return this.assessing ? `${this.assess.done} из ${this.assess.total}` : 'Оценить лиды'; },
-    get assessTitle() {
-      return this.assessing ? `Остановить оценку: оценено ${this.assess.done} из ${this.assess.total}`
-        : 'Оценить приоритет лидов, сохранённых до появления оценки по карточке 2ГИС';
-    },
-    async checkAssess() {
-      try {
-        this.assess = await api('/api/folders/assess/status');
-        if (this.assessing) this.pollAssess();
-      } catch (e) { /* the status is optional: the button still works */ }
-    },
-    async toggleAssess() {
-      try {
-        if (this.assessing) {
-          this.assess = await api('/api/folders/assess/stop', {});
-          return;
-        }
-        this.assess = await api(`/api/folders/${this.folderId}/assess`, { headless: !this.form.showChrome });
-        this.pollAssess();
-      } catch (e) {
-        this.notify(e.message);
-      }
-    },
-    async pollAssess() {
-      if (this.assessPolling) return;  // one loop: folder loads call checkAssess again
-      this.assessPolling = true;
-      try {
-        await this.waitAssess();
-      } finally {
-        this.assessPolling = false;
-      }
-    },
-    async waitAssess() {
-      while (this.assessing) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        try {
-          this.assess = await api('/api/folders/assess/status');
-        } catch (e) {
-          this.notify(`Оценка: ${e.message}`);
-          return;
-        }
-      }
-      const a = this.assess;
-      if (a.status === 'error') this.notify(`Оценка прервана: ${a.error}`);
-      else if (!a.total) this.notify('Все лиды в папке уже оценены');
-      else this.notify(`Оценено лидов: ${a.done} из ${a.total}` + (a.errors ? `, с ошибкой: ${a.errors}` : ''));
-      if (this.onLeads && a.folder_id === this.folderId) await this.showFolder(this.folderId);
-    },
     get sameSphereFolders() { return this.folders.filter((f) => f.sphere === this.form.sphere); },
     async openSave() {
       await this.fetchFolders();
@@ -826,5 +774,5 @@ document.addEventListener('alpine:init', () => {
     async openFolder() {
       await api('/api/leads/open-folder', { path: this.exportPath }).catch((e) => this.notify(e.message));
     },
-  }, crmPart()));
+  }, crmPart(), workPart()));
 });

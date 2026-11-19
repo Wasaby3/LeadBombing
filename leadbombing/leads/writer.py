@@ -131,13 +131,19 @@ class LeadsWriter:
         self._seen.discard(firm.firm_id(item))
         self._seen_keys.discard((firm.short_name(item).lower(), (item.get('address_name') or '').lower()))
 
-    def add(self, item: dict, prices: Optional[dict], hero: Optional[bytes]) -> None:
-        """Store an already filtered firm (e.g. replayed from another run); known firms are updated."""
+    def add(self, item: dict, prices: Optional[dict], hero: Optional[bytes], slug: Optional[str] = None) -> None:
+        """Store an already filtered firm (e.g. replayed from another run); known firms are updated.
+        `slug` (a saved lead's) names its tenant folder instead of one made from the name."""
         firm_id = firm.firm_id(item)
         if firm_id in self._seen:
             return
         self._seen.add(firm_id)
-        self._store(item, prices, hero, self._known(firm_id))
+        self._store(item, prices, hero, self._known(firm_id), slug=slug)
+
+    def slug_owner(self, slug: str) -> Optional[str]:
+        """Firm id of the lead with `slug` in this base, None when the slug is free."""
+        lead = next((lead for lead in self._leads if lead.get('slug') == slug), None)
+        return firm_id_of(lead.get('source', '')) if lead else None
 
     def _skip(self, reason: str, name: Optional[str] = None) -> None:
         self._skipped[reason] += 1
@@ -173,14 +179,17 @@ class LeadsWriter:
         self.raw.append({'item': item, 'prices': prices, 'booking': booking, 'hero': hero, 'slug': slug})
 
     def _store(self, item: dict, prices: Optional[dict], hero: Optional[bytes], known: Optional[dict],
-               booking: Optional[list] = None) -> str:
+               booking: Optional[list] = None, slug: Optional[str] = None) -> str:
         firm_id = firm.firm_id(item)
         short = firm.short_name(item)
         prefix = self.sphere.slug_prefix
         taken = {lead['slug'] for lead in self._leads if lead is not known}
-        slug = known['slug'] if known else unique(slugify(short) or f'{prefix}-{firm_id[-6:]}', taken)
-        if len(slug) < 3:
-            slug = unique(f'{prefix}-{slug}', taken)
+        if not slug:
+            slug = known['slug'] if known else unique(slugify(short) or f'{prefix}-{firm_id[-6:]}', taken)
+            if len(slug) < 3:
+                slug = unique(f'{prefix}-{slug}', taken)
+        elif known and known['slug'] != slug:
+            logger.warning('%s: папка tenants/%s теперь tenants/%s, старая осталась', short, known['slug'], slug)
         folder = self._base / 'tenants' / slug
         if hero:
             (folder / 'images').mkdir(parents=True, exist_ok=True)

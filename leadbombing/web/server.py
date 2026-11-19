@@ -12,13 +12,13 @@ from ..logger import logger
 from ..paths import data_path, user_path
 from .account import Accounts
 from .account_api import register as register_account
-from .assess_job import register as register_assess
 from .auth import register as register_auth
 from .classic_api import register as register_classic
 from .clients_api import register as register_clients
 from .folders_api import register as register_folders
 from .leads_api import register as register_leads
 from .supabase import store_from_env
+from .work_api import register as register_work
 
 _SESSION_DAYS = 30
 _SECRET_ENV = 'LEADBOMBING_SECRET_KEY'
@@ -67,7 +67,7 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
     leads_job = register_leads(app, _load_cities)
     register_folders(app, leads_job)
     register_clients(app)
-    register_assess(app, lambda: leads_job.running)  # TEMP: assessment of old leads, see assess_job.py
+    register_work(app)
     register_classic(app, _load_cities)
 
     @app.route('/')

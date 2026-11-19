@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from ..config import Configuration
 from ..leads import LeadsWriter
 from ..leads.contacts import card_owner_mark
+from ..leads.firm import firm_id
 from ..leads.writer import CARD_KEYS
 from ..leads.spheres import get_sphere
 from ..logger import logger
@@ -277,8 +278,10 @@ def _close_quietly(parser: Any) -> None:
         logger.debug('Закрытие браузера: %r', e)
 
 
-def export_raw(target: Path, sphere: Any, raw: list[dict]) -> dict[str, Any]:
-    """Replay firms ({item, prices, hero}) into the base at `target`; refuses a base of another sphere."""
+def export_raw(target: Path, sphere: Any, raw: list[dict], keep_slugs: bool = False) -> dict[str, Any]:
+    """Replay firms ({item, prices, hero, slug}) into the base at `target`; refuses a base of another sphere.
+    With `keep_slugs` (saved leads) each firm's tenant folder is its slug, the end of its demo URL: a slug another
+    firm has in that base refuses the export before anything is written."""
     if not raw:
         raise RuntimeError('Нечего выгружать')
     outreach = target / 'outreach.csv'
@@ -288,6 +291,17 @@ def export_raw(target: Path, sphere: Any, raw: list[dict]) -> dict[str, Any]:
         if header and header != sphere.columns:
             raise RuntimeError('В этой папке база другой сферы — выберите пустую папку или папку этой сферы')
     with LeadsWriter(str(target), sphere=sphere) as out:
+        if keep_slugs:
+            _check_slugs(out, raw)
         for r in raw:
-            out.add(r['item'], r['prices'], r['hero'])
+            out.add(r['item'], r['prices'], r['hero'], r['slug'] if keep_slugs else None)
     return {'path': str(target), 'added': out.summary['added'], 'updated': out.summary['updated']}
+
+
+def _check_slugs(out: LeadsWriter, raw: list[dict]) -> None:
+    """RuntimeError when a firm's slug belongs to another firm in the base `out` writes to."""
+    for r in raw:
+        owner = out.slug_owner(r['slug'])
+        if owner and owner != firm_id(r['item']):
+            raise RuntimeError(f'В папке выгрузки демо «{r["slug"]}» уже занято другой фирмой — '
+                               'выберите пустую папку или папку, куда выгружали эти лиды')

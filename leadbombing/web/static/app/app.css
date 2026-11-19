@@ -205,7 +205,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .select > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .select .icon { color: var(--muted); }
 .select:disabled { opacity: .6; cursor: not-allowed; }
-.field input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--danger); }
+.field input[aria-invalid="true"], .path-row input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--danger); }
 .search > .field-error { margin: 8px 0 0 !important; }
 .popover { position: absolute; top: calc(100% + 6px); left: 0; width: 280px; z-index: 10; background: var(--surface);
   border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 8px; }
@@ -467,6 +467,7 @@ tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: va
 .demo-saved { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
 .demo-saved .btn { height: 30px; padding: 0 10px; }
 .field-error { color: var(--danger); font-size: 12.5px; margin-top: 6px !important; }
+.field-note { margin-top: 6px !important; overflow-wrap: anywhere; }  /* a hint under a field, e.g. the link it gives */
 .path-row input[type=url] { height: 36px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); padding: 0 12px;
   width: 100%; outline: none; }
 .comment-field { width: 100%; min-height: 96px; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;

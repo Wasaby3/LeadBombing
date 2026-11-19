@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from leadbombing.leads.contacts import card_owner_mark
+from leadbombing.leads.firm import firm_id
 from leadbombing.web.lead_crm import DEFAULT_CRM, crm_of
 from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError, client_row
 
@@ -103,7 +104,8 @@ class FakeStore:
     def create_folder(self, token: str, folder: dict) -> int:
         self._write(token)
         folder_id = next(self._ids)
-        self.folders[folder_id] = {'id': folder_id, 'created_at': f'2026-11-17T00:00:{folder_id:02d}', **folder}
+        self.folders[folder_id] = {'id': folder_id, 'created_at': f'2026-11-17T00:00:{folder_id:02d}',
+                                   'demo_base_url': None, 'demo_filled_at': None, **folder}
         self.folder_items[folder_id] = {}
         return folder_id
 
@@ -132,6 +134,10 @@ class FakeStore:
             # the snapshot is replaced, the work on the lead is kept; a new lead starts with its `initial` work
             work = crm_of(old) if old else {**DEFAULT_CRM, **(lead.get('initial') or {})}
             items[lead['slug']] = {**copy.deepcopy(work), **copy.deepcopy(snapshot)}
+
+    def folder_firms(self, token: str, folder_id: int) -> dict[str, str]:
+        self._check(token)
+        return {firm_id(r['raw']['item']): r['slug'] for r in self.folder_items.get(folder_id, {}).values()}
 
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
@@ -172,21 +178,21 @@ class FakeStore:
         self._write(token)
         return self.folder_items.get(folder_id, {}).pop(slug, None) is not None
 
+    def fill_demo_urls(self, token: str, folder_id: int, base_url: str, slugs: Optional[list[str]]) -> dict:
+        self._write(token)
+        targets = [r for r in self._leads_of(folder_id) if slugs is None or r['slug'] in slugs]
+        items = self.folder_items[folder_id]
+        for r in targets:
+            if r['demo_source'] != 'manual':
+                items[r['slug']] = {**r, 'demo_url': f"{base_url}/{r['slug']}", 'demo_source': 'auto'}
+        self.folders[folder_id] = {**self.folders[folder_id], 'demo_base_url': base_url,
+                                   'demo_filled_at': datetime.now(timezone.utc).isoformat()}
+        kept = sum(1 for r in targets if r['demo_source'] == 'manual')
+        return {'filled': len(targets) - kept, 'kept': kept}
+
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
         return [{'slug': r['slug'], 'raw': copy.deepcopy(r['raw'])} for r in self._leads_of(folder_id)]
-
-    # TEMP: assessment of old leads (web/assess_job.py)
-    def folder_assess_rows(self, token: str, folder_id: int) -> list[dict]:
-        self._check(token)
-        return [{'slug': r['slug'], 'card': copy.deepcopy(r['card']), 'item': copy.deepcopy(r['raw']['item']),
-                 'priority': r['priority'], 'comment': r['comment']} for r in self._leads_of(folder_id)]
-
-    def set_assessment(self, token: str, folder_id: int, slug: str, fields: dict) -> None:
-        self._write(token)
-        items = self.folder_items.get(folder_id, {})
-        if slug in items:
-            items[slug] = {**items[slug], **copy.deepcopy(fields)}
 
 
 def login(client: Any, password: str = 'admin') -> Any:

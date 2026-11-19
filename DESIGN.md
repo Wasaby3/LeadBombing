@@ -245,7 +245,7 @@ components:
 **Поля:** `.field` (подпись `<span>` сверху + `input`/`select`), `.path-row` (поле + кнопка «Выбрать папку»,
 переносится), `.select` (кнопка-выпадашка с иконкой `chevron-down` + `.popover`), `.check` (чекбокс с подписью),
 `.toggle`. Ошибка поля: `aria-invalid="true"` на поле (красная рамка) + `.field-error` с `role="alert"` и `id`,
-на который ссылается `aria-describedby`.
+на который ссылается `aria-describedby`. Подсказка под полем (например, какая ссылка получится) — `.muted.small.field-note`.
 
 **Выбор одного из нескольких:** `.chip` в контейнере `.spheres` (сферы, папки), `.segmented` (тема, приоритет,
 режим сохранения), `.st-btn` (статус лида). Контейнер — `role="radiogroup"` с `aria-label` и

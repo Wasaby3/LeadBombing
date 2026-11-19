@@ -12,13 +12,14 @@
 <link rel="stylesheet" href="/static/app/app.css">
 <script src="/static/app/vendor/motion-11.11.13.js"></script>
 <script src="/static/app/crm.js"></script>
+<script src="/static/app/work.js"></script>
 <script src="/static/app/app.js"></script>
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></symbol></svg>
 <a class="skip-link" href="#main">Перейти к содержимому</a>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -208,12 +209,9 @@
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-plus"/></svg>
           <span>Сохранить лиды</span>
         </button>
-        <!-- TEMP: assessment of old leads by their 2GIS card (assess_job.py); remove once old folders are assessed -->
-        <button type="button" class="btn" x-show="onLeads && list.length" @click="toggleAssess()"
-                :title="assessTitle" :aria-label="assessing ? assessTitle : null">
-          <svg class="icon" aria-hidden="true" x-show="!assessing"><use href="/static/app/vendor/icons.svg#play"/></svg>
-          <svg class="icon" aria-hidden="true" x-show="assessing"><use href="/static/app/vendor/icons.svg#square"/></svg>
-          <span x-text="assessLabel"></span>
+        <button type="button" class="btn" x-show="onLeads && list.length" @click="openWork()">
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#wand-sparkles"/></svg>
+          <span class="nav-full" x-text="picked.length ? 'Проработать выбранные' : 'Проработать лиды'"></span><span class="nav-short">Проработать</span>
         </button>
         <button type="button" class="btn primary" x-show="canExport" @click="exportOpen = true">
           <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#download"/></svg>
@@ -527,6 +525,13 @@
         «Руководитель» сохраняются. В папку другой сферы выгрузить нельзя.</p>
       <p>«Сохранить лиды» кладёт найденное в папку в вашем кабинете (раздел «Сохранённые лиды»), оттуда их можно
         выгрузить позже. Подписи контактов и юрлицо хранятся только в карточке лида, в файлы выгрузки они не попадают.</p>
+      <p><b>Slug лида в папке</b> служит именем его демо: папка <code>tenants/&lt;slug&gt;/</code> при выгрузке и конец ссылки на
+        демо («Проработать лиды», раздел 9). Поиск даёт slug по названию в порядке выдачи (филиалы сети:
+        <code>rigla</code>, <code>rigla-2</code>…), поэтому при сохранении в папку он сверяется с ней: фирма, которая уже
+        есть в папке, сохраняет свой slug; новая оставляет свой, если он свободен, иначе получает следующий. Одноимённые
+        фирмы из разных поисков не затирают друг друга. Выгрузка сохранённых лидов пишет <code>tenants/</code> строго по
+        их slug, даже если выгружается часть папки. Если в папке выгрузки этот slug уже у другой фирмы, выгрузка
+        остановится с сообщением и ничего не запишет. Выгрузка со страницы поиска, как раньше, даёт имена заново.</p>
     </article>
 
     <article class="panel" id="docs-leads">
@@ -555,11 +560,20 @@
           карточке 2ГИС (раздел 10), дальше его меняют вручную.</li>
         <li><b>Уже связались</b> — галочки напротив контактов из карточки: по каким уже связывались.</li>
         <li><b>Демо-приложение</b> — ссылка (только <code>http://</code> или <code>https://</code>) на демо, которое мы
-          предлагаем лиду, с кнопками «Открыть демо» и «Копировать ссылку». Сейчас её вписывают вручную; в базе предусмотрена
-          автоматическая загрузка в будущем.</li>
+          предлагаем лиду, с кнопками «Открыть демо» и «Копировать ссылку». Её вписывают вручную («вписано вручную») или
+          ставит «Проработать лиды» («проставлено при проработке», см. ниже).</li>
         <li><b>Комментарий</b> — до 5000 символов, сохраняется кнопкой «Сохранить комментарий».</li>
         <li><b>Удалить лид</b> (внизу карточки) — с подтверждением; лид пропадает из папки вместе со статусом, комментарием и фото.</li>
       </ul>
+      <p><b>Проработать лиды</b>: кнопка над таблицей папки (на телефоне «Проработать»). Работает со всеми лидами
+        папки или с выбранными галочками. Сейчас она проставляет ссылку на демо, позже сюда добавится другой анализ. В
+        окне вводят адрес демо-приложения, например <code>https://demo.example.ru/s</code>; ссылка лида состоит из этого адреса,
+        <code>/</code> и slug лида: <code>https://demo.example.ru/s/usadba-bannaya</code>. Slug тот же, что у папки
+        <code>tenants/&lt;slug&gt;/</code> при выгрузке, поэтому выгрузку можно залить на сервер под теми же именами.
+        Под полем видна ссылка первого лида. Слэш в конце адреса отбрасывается, адрес нужен без пробелов, <code>?</code>
+        и <code>#</code>. Ссылки, вписанные вручную, и клиенты не меняются; ссылки, проставленные раньше,
+        пересобираются по новому адресу. Папка запоминает адрес: при следующем открытии окно уже заполнено и пишет,
+        когда ссылки проставляли. В итоге уведомление скажет, скольким лидам проставлено и сколько оставлено со своей ссылкой.</p>
       <p>Старые статусы переведены: «Новый» → «Ещё не написал», «Ожидаем ответ» и «Не ответил» → «Написал», «Слился» →
         «Отказался», «Наш клиент» → «Купил» и сразу в клиенты.</p>
       <p>Разделы и подразделы карточки (на обеих страницах) сворачиваются кликом по заголовку, значок в шапке
@@ -587,10 +601,6 @@
         «Работе с клиентом» как «Оценка по карточке 2ГИС». При сохранении в папку новый лид получает приоритет и
         комментарий из оценки; лид, который уже был в папке, их не меняет. В файлы выгрузки оценка не попадает. Сайты
         фирм не открываются, поэтому удобство брони на сайте не проверяется — это сказано в пояснении.</p>
-      <p><b>Временно:</b> у лидов, сохранённых раньше, оценки нет. Кнопка «Оценить лиды» на странице «Сохранённые лиды»
-        открывает Chrome на 2ГИС и оценивает лиды папки без оценки — по одному запросу на лид с паузой 2 секунды.
-        Приоритет и комментарий ставятся, только если они пустые. Если 2ГИС покажет капчу, оценка остановится; повторный
-        клик продолжит с неоценённых.</p>
     </article>
 
     <article class="panel" id="docs-clients">
@@ -752,7 +762,7 @@
                       <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#copy"/></svg>
                       <span>Копировать ссылку</span>
                     </button>
-                    <span class="muted small" x-text="crm.demo_source === 'auto' ? 'загружено автоматически' : 'вписано вручную'"></span>
+                    <span class="muted small" x-text="crm.demo_source === 'auto' ? 'проставлено при проработке' : 'вписано вручную'"></span>
                   </div>
                   <p class="muted small" x-show="!crm.demo_url">Ссылка на демо-приложение, которое мы предлагаем этому лиду</p>
                 </div>
@@ -902,6 +912,33 @@
       <button type="submit" class="btn primary" :disabled="!exportPath || exporting">
         <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#download"/></svg>
         <span x-text="exporting ? 'Выгружаем…' : `Выгрузить ${exportCount} ${leadsWord(exportCount)}`"></span>
+      </button>
+    </div>
+  </form>
+
+  <!-- «Проработать лиды»: the demo URL of each lead of the folder (work.js) -->
+  <div class="scrim" x-show="workOpen" x-transition.opacity @click="workOpen = false"></div>
+  <form class="modal" x-show="workOpen" x-transition x-ref="workDialog" role="dialog" aria-modal="true"
+        aria-labelledby="work-title" @submit.prevent="!working && runWork()" @keydown.tab="trapTab($event)" novalidate>
+    <h2 id="work-title">Проработать лиды</h2>
+    <p class="muted"><span x-text="picked.length ? 'Выбранные лиды' : 'Все лиды папки'"></span>:
+      <b x-text="exportCount + ' ' + leadsWord(exportCount)"></b>. Каждому проставится ссылка на демо: адрес
+      приложения, косая черта и имя лида. Имя то же, что у его папки в <code>tenants/</code> при выгрузке. Ссылки,
+      вписанные вручную, и клиенты не меняются.</p>
+    <p x-show="workedBefore">Ссылки уже проставляли <b x-text="workedBefore"></b>, новый адрес заменит их.</p>
+    <label class="field" for="work-url"><span>Адрес демо-приложения</span></label>
+    <div class="path-row">
+      <input type="url" id="work-url" name="demo-base-url" x-model="workForm.baseUrl" placeholder="https://demo.example.ru…"
+             maxlength="1900" spellcheck="false" autocomplete="url" data-autofocus
+             :aria-invalid="!!workForm.error" aria-describedby="work-example work-error" @input="workForm.error = ''">
+    </div>
+    <p class="field-error" id="work-error" role="alert" x-show="workForm.error" x-text="workForm.error"></p>
+    <p class="muted small field-note" id="work-example" x-show="workExample">Ссылка первого лида: <code x-text="workExample"></code></p>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" @click="workOpen = false">Отмена</button>
+      <button type="submit" class="btn primary" :disabled="working || !workForm.baseUrl.trim()">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#wand-sparkles"/></svg>
+        <span x-text="working ? 'Прорабатываем…' : `Проработать ${exportCount} ${leadsWord(exportCount)}`"></span>
       </button>
     </div>
   </form>

@@ -1,4 +1,6 @@
 """Saved leads by folders: save from a run, add to an existing folder, card, photo and export like the search page."""
+import json
+
 import pytest
 
 import leadbombing.leads.writer as writer_mod
@@ -7,7 +9,7 @@ import leadbombing.web.leads_job as job_mod
 from fake_store import FakeStore, login
 from leadbombing.web import create_app
 from test_leads_api import FakeParser, wait_done
-from test_leads_golden import GOLDEN, tree, _FixedDate, _Resp
+from test_leads_golden import FIXTURES, GOLDEN, tree, _FixedDate, _Resp
 
 
 @pytest.fixture()
@@ -178,3 +180,71 @@ def test_deleted_lead_leaves_folder_with_its_photo(client, tmp_path):
         'hlebnikovskie-bani']
     assert client.get('/api/folders').get_json()['folders'][0]['count'] == 1
     assert client.delete(item).status_code == 404
+
+
+class TwinParser(FakeParser):
+    """A run where another «Хлебниковские бани» (a branch at another address) comes first and takes the bare slug."""
+
+    def parse(self, writer):
+        data = json.loads((FIXTURES / 'bani_items.json').read_text('utf-8'))
+        original = next(i for i in data['items'] if i['name'] == 'Хлебниковские бани')
+        with_photo = next(i for i in data['items'] if i['name'].startswith('Усадьба'))
+        twin = {**original, 'id': '70000001000000099', 'address_name': 'Садовая, 9',
+                'external_content': with_photo['external_content']}
+        writer.fetch_state = lambda path, expr: {'prices': data['prices'].get(path.split('/')[2]), 'booking': None}
+        for item in (twin, original):
+            writer.write({'result': {'items': [item]}})
+
+
+def run_twins(client, monkeypatch, **save):
+    monkeypatch.setattr(job_mod, 'get_parser', TwinParser)
+    run(client, sphere='bani')
+    return client.post('/api/folders/save', json=save).get_json()
+
+
+def test_same_name_from_another_run_gets_its_own_slug_and_keeps_the_first(client, monkeypatch, tmp_path):
+    # Arrange: the original firm is in the folder with work on it
+    folder_id = saved_folder(client)
+    first = f'/api/folders/{folder_id}/item/hlebnikovskie-bani'
+    client.patch(first, json={'comment': 'звонил'})
+
+    # Act: a run where the twin took «hlebnikovskie-bani» and the original became «hlebnikovskie-bani-2»
+    assert run_twins(client, monkeypatch, folder_id=folder_id)['saved'] == 2
+
+    # Assert: the original keeps its slug and work, the twin gets a free slug everywhere in its card
+    leads = client.get(f'/api/folders/{folder_id}').get_json()['leads']
+    assert [lead['slug'] for lead in leads] == ['usadba-bannaya', 'hlebnikovskie-bani-2', 'hlebnikovskie-bani']
+    assert client.get(first).get_json()['crm']['comment'] == 'звонил'
+    twin = client.get(f'/api/folders/{folder_id}/item/hlebnikovskie-bani-2').get_json()
+    assert (twin['lead']['folder'], twin['row']['Демо (slug)'], twin['business']['slug']) == (
+        'tenants/hlebnikovskie-bani-2', 'hlebnikovskie-bani-2', 'hlebnikovskie-bani-2')
+    assert (tmp_path / 'user' / 'folders' / str(folder_id) / 'hlebnikovskie-bani-2.jpg').is_file()
+
+
+def test_export_names_tenant_folders_by_the_folder_slug(client, monkeypatch, tmp_path):
+    # Arrange: in a new folder the original firm is saved alone with its run slug «hlebnikovskie-bani-2»
+    folder_id = run_twins(client, monkeypatch, name='Бани', slugs=['hlebnikovskie-bani-2'])['folder']['id']
+
+    # Act
+    out = tmp_path / 'export'
+    assert client.post(f'/api/folders/{folder_id}/export', json={'path': str(out)}).get_json()['ok']
+
+    # Assert: the demo app folder is the folder slug, not a fresh one
+    assert [p.name for p in (out / 'tenants').iterdir()] == ['hlebnikovskie-bani-2']
+    assert [lead['slug'] for lead in json.loads((out / 'leads.json').read_text('utf-8'))] == ['hlebnikovskie-bani-2']
+
+
+def test_export_refuses_a_slug_taken_by_another_firm_and_writes_nothing(client, monkeypatch, tmp_path):
+    # Arrange: the export folder has the original «hlebnikovskie-bani»; another folder has the twin under that slug
+    out = tmp_path / 'export'
+    first = saved_folder(client)
+    assert client.post(f'/api/folders/{first}/export', json={'path': str(out)}).get_json()['ok']
+    before = tree(out)
+    second = run_twins(client, monkeypatch, name='Двойники')['folder']['id']
+
+    # Act
+    r = client.post(f'/api/folders/{second}/export', json={'path': str(out)})
+
+    # Assert
+    assert r.status_code == 409 and 'hlebnikovskie-bani' in r.get_json()['error']
+    assert tree(out) == before

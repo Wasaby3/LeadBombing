@@ -2,12 +2,14 @@
 channels, the demo app and, for a client, its client status.
 
 `parse_patch` checks a change from the UI before it goes to the database. The demo app's `demo_source` is
-`manual` for a URL typed by hand; a future generator will write `auto` through the store directly.
+`manual` for a URL typed by hand and `auto` for one put by «Проработать лиды» (base URL from `parse_base_url` plus
+the lead's slug, written by the store's `fill_demo_urls`).
 A lead becomes a client only through the store's `make_client` (status «Купил», client status «Всё ок»);
 `client_status` is None for a lead.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 STATUSES = ('not_written', 'written', 'in_progress', 'almost', 'bought', 'refused')
@@ -15,7 +17,9 @@ CLIENT_STATUSES = ('ok', 'question', 'bug')  # «Всё ок», «Есть во�
 MAX_PRIORITY = 5  # 0 not set, 1 very low … 5 very high (see leads/booking.py for the automatic one)
 MAX_COMMENT = 5000
 MAX_URL = 2000
+MAX_SLUG = 60  # a folder slug (leads_api._SLUG_RE); the base URL leaves room for "/<slug>" within MAX_URL
 MAX_CONTACTED = 50
+_BASE_URL_RE = re.compile(r'^https?://[^/\s]+', re.IGNORECASE)  # a scheme and a host
 MAX_CONTACT_TEXT = 300
 CRM_FIELDS = ('status', 'priority', 'comment', 'contacted', 'demo_url', 'demo_source', 'client_status', 'client_since')
 DEFAULT_CRM: dict[str, Any] = {'status': 'not_written', 'priority': 0, 'comment': '', 'contacted': [],
@@ -75,6 +79,24 @@ def _demo_url(value: Any) -> dict:
     if len(url) > MAX_URL:
         raise ValueError(f'Ссылка на демо длиннее {MAX_URL} символов')
     return {'demo_url': url, 'demo_source': 'manual'}
+
+
+def parse_base_url(value: Any) -> str:
+    """The demo app's base URL for «Проработать лиды», without a trailing slash; ValueError with a Russian message."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('Введите адрес демо-приложения')
+    url = value.strip().rstrip('/')
+    if not _BASE_URL_RE.match(url):
+        raise ValueError('Адрес демо-приложения должен начинаться с http:// или https://')
+    scheme, rest = url.split('://', 1)
+    url = f'{scheme.lower()}://{rest}'  # the database checks a lower-case scheme
+    if any(ch.isspace() for ch in url):
+        raise ValueError('В адресе демо-приложения не должно быть пробелов')
+    if '?' in url or '#' in url:
+        raise ValueError('Адрес демо-приложения нужен без ? и # — название лида добавится в конец через /')
+    if len(url) + 1 + MAX_SLUG > MAX_URL:
+        raise ValueError('Адрес демо-приложения слишком длинный')
+    return url
 
 
 _PARSERS: dict[str, Callable[[Any], dict]] = {

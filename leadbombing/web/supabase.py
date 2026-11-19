@@ -11,6 +11,7 @@ from typing import Any, Optional
 import requests
 
 from ..leads.contacts import card_owner_mark
+from ..leads.firm import firm_id
 from ..logger import logger
 from .lead_crm import CRM_FIELDS, crm_of
 
@@ -19,10 +20,10 @@ LOGIN_DOMAIN = 'leadbombing.local'  # Supabase logs in by email: login `admin` i
 _TIMEOUT_S = 10
 _ENV_FILE = '.env.local'
 _RUN_FIELDS = 'id,sphere,query,cities,lead_limit,status,accepted,skipped,error,started_at,finished_at'
-_FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at'
+_FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at,demo_base_url,demo_filled_at'
 _FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
 _CRM_SELECT = ','.join(CRM_FIELDS)
-_ONLY_LEADS = {'client_status': 'is.null'}  # a folder shows, exports and assesses leads, not clients
+_ONLY_LEADS = {'client_status': 'is.null'}  # a folder shows and exports leads, not clients
 _OWNER_SELECT = 'contacts:card->contacts,legal:card->legal'  # what the owner crown needs, not the whole card
 
 
@@ -168,6 +169,12 @@ class SupabaseStore:
                               params={'on_conflict': 'folder_id,slug'},
                               prefer='resolution=merge-duplicates,return=minimal')
 
+    def folder_firms(self, token: str, folder_id: int) -> dict[str, str]:
+        """Firm id → slug of every lead and client of the folder: a slug in a folder belongs to one firm."""
+        rows = self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'slug,item_id:raw->item->>id', 'folder_id': f'eq.{folder_id}'})
+        return {firm_id({'id': r['item_id'] or ''}): r['slug'] for r in rows}
+
     def folder_leads(self, token: str, folder_id: int) -> list[dict]:
         """Table rows of the folder's leads (not clients) in folder order, each with the lead's status and priority."""
         rows = self._request('GET', '/rest/v1/folder_leads', token, params={
@@ -217,23 +224,17 @@ class SupabaseStore:
                              prefer='return=representation')
         return bool(rows)
 
+    def fill_demo_urls(self, token: str, folder_id: int, base_url: str, slugs: Optional[list[str]]) -> dict:
+        """«Проработать лиды»: demo URL `base_url/<slug>` (auto) for the folder's leads, all or only `slugs`; not
+        for clients or URLs typed by hand. {filled, kept} and the folder remembers the base URL with the time."""
+        rows = self._request('POST', '/rest/v1/rpc/fill_demo_urls', token,
+                             json={'p_folder_id': folder_id, 'p_base_url': base_url, 'p_slugs': slugs})
+        return rows[0]
+
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         """[{slug, raw: {item, prices}}] of the folder's leads (not clients) in folder order, for export."""
         return self._request('GET', '/rest/v1/folder_leads', token, params={
             'select': 'slug,raw', **_ONLY_LEADS, 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
-
-    # --- TEMP: assessment of leads saved before the booking button was collected (web/assess_job.py) ---
-
-    def folder_assess_rows(self, token: str, folder_id: int) -> list[dict]:
-        """[{slug, card, item, priority, comment}] in folder order: what the assessment of old leads needs."""
-        return self._request('GET', '/rest/v1/folder_leads', token, params={
-            'select': 'slug,card,item:raw->item,priority,comment', **_ONLY_LEADS, 'folder_id': f'eq.{folder_id}',
-            'order': 'added_at.asc'})
-
-    def set_assessment(self, token: str, folder_id: int, slug: str, fields: dict) -> None:
-        """Save a lead's assessed card (and priority, comment when given); not the user's work, so no worked_at."""
-        self._request('PATCH', '/rest/v1/folder_leads', token, json=fields,
-                      params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}'}, prefer='return=minimal')
 
     # --- HTTP ---
 
