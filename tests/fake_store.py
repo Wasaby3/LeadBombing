@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from leadbombing.leads.contacts import card_owner_mark
 from leadbombing.leads.firm import firm_id
-from leadbombing.web.lead_crm import DEFAULT_CRM, crm_of
+from leadbombing.web.lead_crm import DEFAULT_CRM, NOT_WRITTEN, crm_of
 from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError, client_row
 
 ADMIN_ID = 'a0000000-0000-4000-8000-000000000001'
@@ -105,7 +105,7 @@ class FakeStore:
         self._write(token)
         folder_id = next(self._ids)
         self.folders[folder_id] = {'id': folder_id, 'created_at': f'2026-11-17T00:00:{folder_id:02d}',
-                                   'demo_base_url': None, 'demo_filled_at': None, **folder}
+                                   'demo_base_url': None, 'demo_filled_at': None, 'removed_worked': 0, **folder}
         self.folder_items[folder_id] = {}
         return folder_id
 
@@ -176,7 +176,17 @@ class FakeStore:
 
     def delete_folder_lead(self, token: str, folder_id: int, slug: str) -> bool:
         self._write(token)
-        return self.folder_items.get(folder_id, {}).pop(slug, None) is not None
+        gone = self.folder_items.get(folder_id, {}).pop(slug, None)
+        if gone and gone['status'] != NOT_WRITTEN:
+            folder = self.folders[folder_id]
+            self.folders[folder_id] = {**folder, 'removed_worked': folder['removed_worked'] + 1}
+        return gone is not None
+
+    def worked_outside(self, token: str, folder_id: int) -> int:
+        self._check(token)
+        clients = [r for r in self.folder_items.get(folder_id, {}).values()
+                   if r['client_status'] is not None and r['status'] != NOT_WRITTEN]
+        return len(clients) + self.folders[folder_id]['removed_worked']
 
     def fill_demo_urls(self, token: str, folder_id: int, base_url: str, slugs: Optional[list[str]]) -> dict:
         self._write(token)

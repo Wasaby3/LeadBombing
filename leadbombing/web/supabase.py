@@ -13,14 +13,14 @@ import requests
 from ..leads.contacts import card_owner_mark
 from ..leads.firm import firm_id
 from ..logger import logger
-from .lead_crm import CRM_FIELDS, crm_of
+from .lead_crm import CRM_FIELDS, NOT_WRITTEN, crm_of
 
 DEFAULT_URL = 'http://127.0.0.1:55321'
 LOGIN_DOMAIN = 'leadbombing.local'  # Supabase logs in by email: login `admin` is admin@leadbombing.local
 _TIMEOUT_S = 10
 _ENV_FILE = '.env.local'
 _RUN_FIELDS = 'id,sphere,query,cities,lead_limit,status,accepted,skipped,error,started_at,finished_at'
-_FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at,demo_base_url,demo_filled_at'
+_FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at,demo_base_url,demo_filled_at,removed_worked'
 _FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
 _CRM_SELECT = ','.join(CRM_FIELDS)
 _ONLY_LEADS = {'client_status': 'is.null'}  # a folder shows and exports leads, not clients
@@ -219,10 +219,18 @@ class SupabaseStore:
         return [client_row(r) for r in rows]
 
     def delete_folder_lead(self, token: str, folder_id: int, slug: str) -> bool:
-        rows = self._request('DELETE', '/rest/v1/folder_leads', token,
-                             params={'folder_id': f'eq.{folder_id}', 'slug': f'eq.{slug}', 'select': 'slug'},
-                             prefer='return=representation')
-        return bool(rows)
+        """Delete a lead or client; one already worked on (status not «Ещё не написал») stays counted in the folder's
+        removed_worked. False if there is no such lead."""
+        return bool(self._request('POST', '/rest/v1/rpc/delete_folder_lead', token,
+                                  json={'p_folder_id': folder_id, 'p_slug': slug}))
+
+    def worked_outside(self, token: str, folder_id: int) -> int:
+        """Leads of the folder worked on but not in its list: its clients and deleted leads that had a status."""
+        clients = self._request('GET', '/rest/v1/folder_leads', token, params={
+            'select': 'slug', 'folder_id': f'eq.{folder_id}', 'client_status': 'not.is.null',
+            'status': f'neq.{NOT_WRITTEN}'})
+        folder = self.get_folder(token, folder_id)
+        return len(clients) + (folder['removed_worked'] if folder else 0)
 
     def fill_demo_urls(self, token: str, folder_id: int, base_url: str, slugs: Optional[list[str]]) -> dict:
         """«Проработать лиды»: demo URL `base_url/<slug>` (auto) for the folder's leads, all or only `slugs`; not

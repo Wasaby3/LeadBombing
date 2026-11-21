@@ -13,6 +13,7 @@ import re
 from typing import Any, Callable
 
 STATUSES = ('not_written', 'written', 'in_progress', 'almost', 'bought', 'refused')
+NOT_WRITTEN = STATUSES[0]  # «Ещё не написал»: any other status counts in «Написали»
 CLIENT_STATUSES = ('ok', 'question', 'bug')  # «Всё ок», «Есть вопрос», «Срочный баг»
 MAX_PRIORITY = 5  # 0 not set, 1 very low … 5 very high (see leads/booking.py for the automatic one)
 MAX_COMMENT = 5000
@@ -22,7 +23,7 @@ MAX_CONTACTED = 50
 _BASE_URL_RE = re.compile(r'^https?://[^/\s]+', re.IGNORECASE)  # a scheme and a host
 MAX_CONTACT_TEXT = 300
 CRM_FIELDS = ('status', 'priority', 'comment', 'contacted', 'demo_url', 'demo_source', 'client_status', 'client_since')
-DEFAULT_CRM: dict[str, Any] = {'status': 'not_written', 'priority': 0, 'comment': '', 'contacted': [],
+DEFAULT_CRM: dict[str, Any] = {'status': NOT_WRITTEN, 'priority': 0, 'comment': '', 'contacted': [],
                                'demo_url': None, 'demo_source': None, 'client_status': None, 'client_since': None}
 
 

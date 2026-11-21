@@ -241,7 +241,7 @@ th.pick, td.pick { width: 1%; padding-right: 0; }
   margin-bottom: 10px; min-height: 36px; }
 .counters { display: flex; align-items: center; gap: 16px; color: var(--muted); min-width: 0; }
 .counters b { color: var(--text); font-variant-numeric: tabular-nums; }
-.counters > span:first-child { white-space: nowrap; }
+.counters > span:first-child, .counters > .worked { white-space: nowrap; }
 .toggle-skipped, .undo-link { display: inline-flex; align-items: center; gap: 4px; }
 .undo-link .icon { width: 14px; height: 14px; }
 .toggle-skipped b { color: inherit; }
@@ -361,6 +361,12 @@ details.block summary { cursor: pointer; color: var(--muted); }
 .contact-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; font-size: 12.5px; }
 .contact-label .default { color: var(--muted); font-style: italic; }
 .contact-label .default-note { color: var(--muted); font-size: 11.5px; }
+.probe { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 4px; font-size: 12.5px; }
+.probe .link { color: var(--muted); }
+.probe .link:hover, .probe .link[aria-expanded="true"] { color: var(--text); }
+.probe-links { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.probe-links a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.probe-links a:hover { text-decoration: underline; }
 .owner-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px;
   font-size: 11.5px; font-weight: 650; color: var(--owner); background: color-mix(in srgb, var(--owner) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--owner) 35%, transparent); white-space: nowrap; }
@@ -492,6 +498,7 @@ tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: va
 .sub-sec h4 { margin: 0; display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--text); }
 .sub-sec h4 .count { color: var(--muted); font-weight: 600; }
 .sub-sec h4 .link { font-size: 12.5px; }
+.sub-sec h4 .icon-btn { width: 28px; height: 28px; margin: -6px 0; }  /* copy the message from its heading */
 .sub-sec .sec-btn:hover { color: var(--accent); }
 .close { display: grid; place-items: center; }
 .close.fold-all { right: 54px; }

@@ -24,6 +24,21 @@ TEMPLATE_NOTE = 'Шаблон: структура как у бань, текст
 CUSTOM_NOTE = 'Свободный поиск: все фирмы из выдачи 2ГИС по вашему запросу, выгрузка как у шаблонов'
 
 MOSCOW = {'code': 'moscow', 'name': 'Москва', 'domain': 'ru'}
+NO_DEMO_URL = '[ссылка на демо]'
+# The message of a saved bathhouse lead's card (never exported): {demo_url} is the lead's demo app link.
+BANI_DEMO_MESSAGE = (
+    'Здравствуйте! Хотел на днях с друзьями забронировать у вас баню, но не нашел, как это сделать быстро онлайн, '
+    'а звонить не стал. К тому же если кто-то не может дозвониться то бронирует другую баню.\n'
+    'как раз делаю такие штуки, поэтому собрал вам онлайн-запись с вашим названием, прайсом и залами: \n'
+    '{demo_url}\n'
+    'Домен пока временный, поэтому сайт так странно называется). Если понравится, перенесу на нормальный. '
+    'Фото тоже поставлю ваши.\n'
+    'Открывается как приложение: заходите по ссылке с телефона, в меню браузера жмёте «Добавить на главный экран», '
+    'и рядом с остальными приложениями появляется ваша иконка. Запускается на весь экран без строки браузера, '
+    'при этом ни вам, ни клиентам ничего скачивать не надо.\n'
+    'Клиент сам выбирает услугу и время, запись сразу падает вам в кабинет, а слот на это время закрывается. '
+    'Цены и фото поставим ваши.\n'
+    'Гляньте, как будет минутка, и скажите, как вам.')
 
 
 def _has_phone(item: dict) -> bool:
@@ -74,6 +89,10 @@ class BaniSphere:
 
     def build(self, item: dict, prices: Optional[dict], slug: str, hero: bool, today: date) -> dict[str, Any]:
         return bani_build.build(item, prices, slug, hero, today)
+
+    def demo_message(self, demo_url: Optional[str]) -> Optional[str]:
+        """The saved lead card's message with its demo app link (a placeholder until there is one)."""
+        return BANI_DEMO_MESSAGE.format(demo_url=demo_url or NO_DEMO_URL)
 
 
 @dataclass(frozen=True)
@@ -141,6 +160,10 @@ class TemplateSphere:
     def build(self, item: dict, prices: Optional[dict], slug: str, hero: bool, today: date) -> dict[str, Any]:
         city = _city_of(item, self.cities) or self.cities[0]
         return generic.build_generic(item, prices, slug, hero, today, self.template, city)
+
+    def demo_message(self, demo_url: Optional[str]) -> Optional[str]:
+        """No demo message for templates yet: the card keeps the message made by the search."""
+        return None
 
 
 def sphere_list() -> list[dict[str, Any]]:

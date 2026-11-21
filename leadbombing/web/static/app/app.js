@@ -11,6 +11,9 @@ const THEME_KEY = 'lb.theme';
 const TINT_KEY = 'lb.tintRows';  // table rows coloured by priority (on by default)
 const PAGES = ['search', 'leads', 'clients', 'profile', 'settings', 'docs'];
 const SORT_NEXT = { '': 'desc', desc: 'asc', asc: '' };  // priority column: high first, low first, folder order
+/* Channel column: each click puts the next channel first (channelKind), the last one returns folder order. */
+const CHANNEL_SORTS = ['', 'tg', 'wa', 'vk', 'phone'];
+const CHANNEL_FIRST = { tg: 'Telegram', wa: 'WhatsApp', vk: 'ВКонтакте', phone: 'звонки' };
 const OWNER_RANK = { owner: 2, maybe: 1 };  // row.owner from leads/contacts.py owner_mark
 const OWNER_TITLES = { owner: 'Есть контакт руководителя', maybe: 'Возможно, номер владельца' };
 /* Lead card sections, top to bottom; «Работа с клиентом» holds the sub-sections. All open when a lead is opened. */
@@ -26,6 +29,15 @@ const NO_FORM_ERROR = { field: '', text: '' };
    has no other phone. Skipped when 2GIS already names a director/owner contact. Adds likelyOwner (the reason). */
 const isPhone = (c) => c.type ? c.type === 'phone' : c.title === 'Телефон'; // old cards have no type
 const isMobilePhone = (c) => /^79\d{9}$/.test(c.value.replace(/\D/g, ''));
+const isMessenger = (c) => ['whatsapp', 'telegram'].includes(c.type) || ['WhatsApp', 'Telegram'].includes(c.title);
+/* A phone in international digits: 8XXXXXXXXXX → 7XXXXXXXXXX. */
+const intlDigits = (value) => String(value || '').replace(/\D/g, '').replace(/^8(\d{10})$/, '7$1');
+const MIN_PHONE_DIGITS = 10;
+/* «Возможный контакт»: links that show whether a phone has Telegram or WhatsApp. */
+const probeLinks = (digits) => [
+  { title: 'Telegram', href: `https://t.me/+${digits}` },
+  { title: 'WhatsApp', href: `https://wa.me/${digits}` },
+];
 function markLikelyOwner(contacts, isIp) {
   if (contacts.some((c) => c.role === 'owner')) return contacts;
   const phones = contacts.filter(isPhone);
@@ -135,6 +147,7 @@ document.addEventListener('alpine:init', () => {
     params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
     leads: [], skipped: [], filter: '', showSkipped: false,
     selected: null, card: null, cardFolder: null,  // the folder of the open saved lead or client
+    probeOpen: {},  // «Возможный контакт» opened per phone digits in the card
     exportOpen: false, exporting: false, exportPath: store.get(PATH_KEY, ''),
     toast: '', _toastTimer: null, _pollTimer: null,
     user: null, authChecked: false, auth: { login: '', password: '', error: '', busy: false },
@@ -143,7 +156,8 @@ document.addEventListener('alpine:init', () => {
     folders: [], folderId: null, folderLeads: [],
     tintRows: store.get(TINT_KEY, true),
     saveOpen: false, saving: false, saveForm: { mode: 'new', name: '', folderId: null },
-    prioritySort: '', ownerSort: false, collapsed: {},
+    prioritySort: '', ownerSort: false, channelSort: '', collapsed: {},
+    folderWorkedOutside: 0,  // «Написали» of the folder not in its list: clients and deleted leads with a status
 
     async init() {
       this.$watch('citiesOpen', (open) => open && this.$nextTick(() => this.$refs.cityFilter.focus()));
@@ -229,6 +243,7 @@ document.addEventListener('alpine:init', () => {
       this.filter = '';
       this.prioritySort = '';
       this.ownerSort = false;
+      this.channelSort = '';
       this.closeCard();
       if (page === 'leads') this.loadFolders();
       if (page === 'clients') this.loadClients();
@@ -254,9 +269,12 @@ document.addEventListener('alpine:init', () => {
       this.picked = [];
       this.closeCard();
       try {
-        this.folderLeads = (await api(`/api/folders/${id}`)).leads;
+        const r = await api(`/api/folders/${id}`);
+        this.folderLeads = r.leads;
+        this.folderWorkedOutside = r.worked_outside || 0;
       } catch (e) {
         this.folderLeads = [];
+        this.folderWorkedOutside = 0;
         if (e.status !== 401) this.notify(`Папка не загружена: ${e.message}`);
       }
     },
@@ -397,11 +415,13 @@ document.addEventListener('alpine:init', () => {
     get visible() {
       const q = this.filter.trim().toLowerCase();
       const found = q ? this.list.filter((l) => `${l.name} ${l.district}`.toLowerCase().includes(q)) : this.list;
-      if (!this.prioritySort && !this.ownerSort) return found;
+      if (!this.prioritySort && !this.ownerSort && !this.channelSort) return found;
       const sign = this.prioritySort === 'desc' ? -1 : 1;
+      const first = (l) => (this.channelKind(l.channel) === this.channelSort ? 0 : 1);
+      const byChannel = (a, b) => (this.channelSort ? first(a) - first(b) : 0);
       const byPriority = (a, b) => (this.prioritySort ? sign * ((a.priority || 0) - (b.priority || 0)) : 0);
       const byOwner = (a, b) => (this.ownerSort ? (OWNER_RANK[b.owner] || 0) - (OWNER_RANK[a.owner] || 0) : 0);
-      return [...found].sort((a, b) => byPriority(a, b) || byOwner(a, b));  // stable: ties keep folder order
+      return [...found].sort((a, b) => byChannel(a, b) || byPriority(a, b) || byOwner(a, b));  // stable: ties keep folder order
     },
     get skippedByReason() {
       const counts = {};
@@ -633,6 +653,7 @@ document.addEventListener('alpine:init', () => {
       this.cardFolder = this.onSaved ? folderId : null;
       this.card = null;
       this.collapsed = {};
+      this.probeOpen = {};
       try {
         const card = await api(this.itemUrl(encodeURIComponent(slug)));
         if (this.selected !== slug) return;  // another lead was opened meanwhile
@@ -656,12 +677,28 @@ document.addEventListener('alpine:init', () => {
 
     /* Table: priority sort, owner crowns, row tint. */
     sortByPriority() { this.prioritySort = SORT_NEXT[this.prioritySort]; },
+    get nextChannelSort() { return CHANNEL_SORTS[(CHANNEL_SORTS.indexOf(this.channelSort) + 1) % CHANNEL_SORTS.length]; },
+    sortByChannel() { this.channelSort = this.nextChannelSort; },
+    get channelSortTitle() {
+      return this.nextChannelSort ? `Сначала ${CHANNEL_FIRST[this.nextChannelSort]}` : 'Вернуть порядок папки';
+    },
+    get channelSortLabel() { return CHANNEL_FIRST[this.channelSort] || ''; },
+    /* «Написали»: leads of the folder with a status other than «Ещё не написал», also those no longer in the list. */
+    get workedCount() {
+      return this.folderLeads.filter((l) => l.status && l.status !== 'not_written').length + this.folderWorkedOutside;
+    },
     ownerTitle(mark) { return OWNER_TITLES[mark] || ''; },
     get prioritySortTitle() {
       return { '': 'Сортировать по приоритету', desc: 'Сначала высокий приоритет', asc: 'Сначала низкий приоритет' }[this.prioritySort];
     },
     saveTint() { store.set(TINT_KEY, this.tintRows); },
 
+    /* A saved bathhouse lead has the message with its demo link (card.demo_message); otherwise the search's message. */
+    get cardMessage() {
+      if (!this.card) return '';
+      if (!this.card.demo_message) return this.card.row['Сообщение'];
+      return this.card.demo_message.replace('[ссылка на демо]', this.crm?.demo_url || '[ссылка на демо]');
+    },
     get cardName() { return this.card ? (this.card.row['Баня'] || this.card.row['Название']) : ''; },
     get cardPrices() {
       return this.card ? (this.card.lead.halls_from_2gis || this.card.lead.services_from_2gis || []) : [];
@@ -702,6 +739,30 @@ document.addEventListener('alpine:init', () => {
         default: 'В 2ГИС подписи нет — подпись по умолчанию',
       }[contact.label_source] || '';
     },
+    /* «Написать (возможно) руководителю»: the crowned contact; its WhatsApp/Telegram link, or wa.me/<phone digits>. */
+    get ownerWrite() {
+      const c = this.cardContacts.find((x) => x.role === 'owner') || this.cardContacts.find((x) => x.likelyOwner);
+      if (!c) return null;
+      const link = [c.href, c.value].find((v) => /^https?:\/\/(wa\.me|api\.whatsapp|t\.me|telegram)/.test(v || ''));
+      const digits = intlDigits(c.value);
+      const href = link || (digits ? `https://wa.me/${digits}` : '');
+      if (!href) return null;
+      return { href, label: c.role === 'owner' ? 'Написать руководителю' : 'Написать возможно руководителю' };
+    },
+    /* Digits of a phone that has no WhatsApp/Telegram of the same number in the card, else '' (no «Возможный контакт»). */
+    probeDigits(contact) {
+      if (!isPhone(contact)) return '';
+      const digits = intlDigits(contact.value);
+      if (digits.length < MIN_PHONE_DIGITS) return '';
+      return this.cardContacts.some((c) => isMessenger(c) && intlDigits(c.value) === digits) ? '' : digits;
+    },
+    /* The number of «Позвонить» when the card's channel is a call. */
+    get writeProbeDigits() {
+      if (!this.card || this.writeKind !== 'phone') return '';
+      return this.probeDigits({ type: 'phone', value: this.card.row['Писать сюда'] || '' });
+    },
+    toggleProbe(digits) { this.probeOpen = { ...this.probeOpen, [digits]: !this.probeOpen[digits] }; },
+    probeLinks,
     get writeHref() { return this.card ? this.contactHref('', this.card.row['Писать сюда']) : '#'; },
     /* The card's main action names its channel: «Написать в WhatsApp», «Позвонить». */
     get writeKind() { return this.card ? this.channelKind(this.card.row['Канал']) : 'phone'; },

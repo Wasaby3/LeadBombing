@@ -248,3 +248,23 @@ def test_export_refuses_a_slug_taken_by_another_firm_and_writes_nothing(client, 
     # Assert
     assert r.status_code == 409 and 'hlebnikovskie-bani' in r.get_json()['error']
     assert tree(out) == before
+
+
+def test_worked_counter_keeps_clients_and_deleted_leads_with_work(client):
+    # Arrange: a folder of three leads, none written to yet
+    run(client, sphere='custom', query='бани', cities=['moscow', 'spb'])
+    folder_id = client.post('/api/folders/save', json={'name': 'бани'}).get_json()['folder']['id']
+    listing = f'/api/folders/{folder_id}'
+    a, b, c = [lead['slug'] for lead in client.get(listing).get_json()['leads']]
+    item = lambda slug: f'{listing}/item/{slug}'  # noqa: E731
+    assert client.get(listing).get_json()['worked_outside'] == 0
+
+    # Act: delete a written lead and an untouched one, make the third a client
+    assert client.patch(item(a), json={'status': 'written'}).get_json()['ok']
+    assert client.delete(item(a)).get_json()['ok']
+    assert client.delete(item(b)).get_json()['ok']  # «Ещё не написал»: not counted
+    assert client.post(f'{item(c)}/client', json={}).get_json()['ok']
+
+    # Assert: the deleted written lead and the client are counted, though the list is empty
+    r = client.get(listing).get_json()
+    assert (r['leads'], r['worked_outside']) == ([], 2)

@@ -146,7 +146,11 @@ def register(app: Any, job: LeadsJob) -> None:
 
     @app.route('/api/folders/<int:folder_id>')
     def folders_leads(folder_id: int):
-        return with_store(lambda store, token: jsonify({'ok': True, 'leads': store.folder_leads(token, folder_id)}))
+        def leads(store: Any, token: str):
+            # «Написали» counts the listed leads with a status in the UI, plus these: clients and deleted leads
+            return jsonify({'ok': True, 'leads': store.folder_leads(token, folder_id),
+                            'worked_outside': store.worked_outside(token, folder_id)})
+        return with_store(leads)
 
     @app.route('/api/folders/<int:folder_id>/item/<slug>')
     def folders_item(folder_id: int, slug: str):
@@ -155,7 +159,12 @@ def register(app: Any, job: LeadsJob) -> None:
 
         def card(store: Any, token: str):
             found = store.folder_card(token, folder_id, slug)
-            return jsonify(found) if found else fail('Лид не найден', 404)
+            folder = store.get_folder(token, folder_id) if found else None
+            if not found or not folder:
+                return fail('Лид не найден', 404)
+            sphere = get_sphere(folder['sphere'], folder['cities'], folder['query'])
+            # the UI puts the lead's current demo link in place of NO_DEMO_URL, so a changed link shows at once
+            return jsonify({**found, 'demo_message': sphere.demo_message(None)})
         return with_store(card)
 
     @app.route('/api/folders/<int:folder_id>/item/<slug>', methods=['PATCH'])

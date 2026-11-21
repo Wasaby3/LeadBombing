@@ -53,8 +53,8 @@ function crmPart() {
       if (this.onClients) this.clients = this.clients.map(patch);
       else this.folderLeads = this.folderLeads.map(patch);
     },
-    /* The open card's row leaves the table: deleted, or a lead made a client. */
-    dropRow(slug, folderId) {
+    /* The open card's row leaves the table: deleted, or a lead made a client. A lead worked on stays in «Написали». */
+    dropRow(slug, folderId, { worked = false } = {}) {
       const other = (l) => !this.isRow(l, slug, folderId);
       if (this.onClients) {
         this.clients = this.clients.filter(other);
@@ -62,6 +62,7 @@ function crmPart() {
         this.folderLeads = this.folderLeads.filter(other);
         this.folders = this.folders.map((f) => (f.id === folderId ? { ...f, count: f.count - 1 } : f));
         this.picked = this.picked.filter((x) => x !== slug);
+        if (worked && folderId === this.folderId) this.folderWorkedOutside += 1;
       }
       if (this.isRow({ slug: this.selected, folder_id: this.cardFolder }, slug, folderId)) this.closeCard();
     },
@@ -116,7 +117,7 @@ function crmPart() {
       this.movingToClients = true;
       try {
         await api(`${this.itemUrl(encodeURIComponent(slug))}/client`, {});
-        this.dropRow(slug, folderId);
+        this.dropRow(slug, folderId, { worked: true });  // a client is «Купил»
         this.notify(`«${name}» — теперь клиент`);
       } catch (e) {
         if (e.status !== 401) this.notify(`Не переведено в клиенты: ${e.message}`);
@@ -130,10 +131,11 @@ function crmPart() {
       const slug = this.selected;
       const folderId = this.cardFolder;
       const done = this.isClient ? 'Клиент удалён' : 'Лид удалён';
+      const worked = this.crm?.status !== 'not_written';
       this.crmBusy = true;
       try {
         await api(this.itemUrl(encodeURIComponent(slug)), undefined, 'DELETE');
-        this.dropRow(slug, folderId);
+        this.dropRow(slug, folderId, { worked });
         this.notify(done);
       } catch (e) {
         this.deleteOpen = false;

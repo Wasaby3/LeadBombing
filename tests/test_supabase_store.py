@@ -163,3 +163,20 @@ def test_client_round_trip(token):
     mine = [c for c in store.list_clients(token) if c['folder_id'] == folder_id]
     assert [(c['slug'], c['name'], c['folder'], c['client_status'], c['status'], c['owner']) for c in mine] == [
         ('a', 'А', 'Клиенты', 'question', 'bought', '')]
+
+
+def test_worked_outside_counts_clients_and_deleted_leads_with_work(token):
+    folder_id = store.create_folder(token, {'name': 'Счётчик', 'sphere': SPHERE, 'query': '', 'cities': []})
+    lead = {'slug': 'a', 'summary': {'name': 'А'}, 'card': {'row': {}}, 'raw': {'item': {}, 'prices': None}}
+    store.add_to_folder(token, folder_id, [lead, {**lead, 'slug': 'b'}, {**lead, 'slug': 'c'}, {**lead, 'slug': 'd'}])
+    store.update_folder_lead(token, folder_id, 'a', {'status': 'refused'})
+    store.update_folder_lead(token, folder_id, 'b', {'status': 'written'})
+    assert store.worked_outside(token, folder_id) == 0
+
+    assert store.delete_folder_lead(token, folder_id, 'a') is True
+    assert store.delete_folder_lead(token, folder_id, 'c') is True  # not written to: not counted
+    assert store.delete_folder_lead(token, folder_id, 'zzz') is False
+    store.make_client(token, folder_id, 'd')
+
+    assert store.worked_outside(token, folder_id) == 2
+    assert store.get_folder(token, folder_id)['removed_worked'] == 1

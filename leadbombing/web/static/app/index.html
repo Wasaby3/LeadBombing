@@ -193,6 +193,8 @@
     <div class="results-head">
       <div class="counters">
         <span><b x-text="list.length"></b> <span x-text="onClients ? clientsWord(list.length) : leadsWord(list.length)"></span></span>
+        <span class="worked" x-show="onLeads && folderId"
+              title="Лиды папки со статусом не «Ещё не написал», в том числе переведённые в клиенты и удалённые">Написали: <b x-text="workedCount"></b></span>
         <span class="muted" x-show="onSearch && fromAccount">из прошлых поисков — чтобы сохранить или выгрузить, начните новый поиск</span>
         <label class="toggle" x-show="list.length"><input type="checkbox" x-model="tintRows" @change="saveTint()"> Раскрасить по приоритету</label>
         <button type="button" class="link toggle-skipped" x-show="onSearch" @click="showSkipped = !showSkipped"
@@ -264,7 +266,12 @@
               <th x-show="onSaved">Статус</th>
               <th class="col-extra" x-show="onClients">Папка</th><th class="col-extra" x-show="onClients">Клиент с</th>
               <th class="col-extra">Район</th><th class="num col-extra">Рейтинг</th>
-              <th>Канал</th><th x-show="!onClients" x-text="pricesTitle"></th></tr>
+              <th :aria-sort="channelSort ? 'other' : 'none'">
+                <button type="button" class="sort-btn" @click="sortByChannel()" :title="channelSortTitle"
+                        :aria-label="'Канал: ' + channelSortTitle">Канал<span x-show="channelSort" x-text="': сначала ' + channelSortLabel"></span>
+                  <svg class="icon sort-mark" aria-hidden="true" x-show="!channelSort"><use href="/static/app/vendor/icons.svg#chevrons-up-down"/></svg>
+                  <svg class="icon sort-mark" aria-hidden="true" x-show="channelSort"><use href="/static/app/vendor/icons.svg#arrow-up"/></svg></button></th>
+              <th x-show="!onClients" x-text="pricesTitle"></th></tr>
         </thead>
         <tbody>
           <template x-for="(l, i) in visible" :key="rowKey(l)">
@@ -488,6 +495,10 @@
         <span class="owner-badge maybe"><svg class="crown" aria-hidden="true"><use href="#crown"/></svg>Возможно, номер владельца</span>,
         когда юрлицо — ИП или это единственный телефон в карточке. Это догадка: номера для записи и отделов её не
         получают, в выгрузку она не попадает.</p>
+      <p>У телефона, для которого в карточке 2ГИС нет WhatsApp или Telegram на том же номере, есть кнопка
+        <b>«Возможный контакт»</b>. Она открывает ссылки <code>t.me/+7…</code> и <code>wa.me/7…</code> с этим номером:
+        по ним видно, есть ли у номера Telegram или WhatsApp. Та же кнопка стоит рядом с «Позвонить», если канал лида —
+        звонок. Ссылки строятся в браузере и в выгрузку не попадают.</p>
     </article>
 
     <article class="panel" id="docs-channel">
@@ -546,6 +557,11 @@
         владельца. Кнопка с короной у заголовка «Название» поднимает таких лидов наверх: сначала руководители, потом
         возможные владельцы. Если включена и сортировка по приоритету, сначала идёт приоритет, а внутри одного
         приоритета — корона.</p>
+      <p>Кнопка у заголовка «Канал» ставит наверх лидов с выбранным каналом: каждый клик — следующий канал (Telegram,
+        WhatsApp, ВКонтакте, звонки), после звонков возвращается порядок папки. Внутри канала работают сортировка по
+        приоритету и корона.</p>
+      <p>Над таблицей папки — счётчик <b>«Написали»</b>: сколько лидов папки уже не в статусе «Ещё не написал». Лиды,
+        переведённые в клиенты, и удалённые лиды, у которых был статус, в нём остаются.</p>
       <p>Карточка лида на обеих страницах устроена одинаково: под кнопками «Написать…», «Копировать сообщение» и
         «Открыть в 2ГИС» сразу идёт «Работа с клиентом», ниже — «Контакты», «Услуги», «Юрлицо». В «Работе с клиентом»
         на поиске — «Сообщение» и «Крючок». На странице «Сохранённые лиды» там же статус и приоритет, «Комментарий»,
@@ -648,7 +664,16 @@
             <svg class="icon" aria-hidden="true" x-show="writeKind === 'phone'"><use href="/static/app/vendor/icons.svg#phone"/></svg>
             <span x-text="writeLabel"></span>
           </a>
-          <button type="button" class="btn" @click="copy(card.row['Сообщение'], 'Сообщение скопировано')">
+          <button type="button" class="btn" x-show="writeProbeDigits" :aria-expanded="!!probeOpen[writeProbeDigits]"
+                  @click="toggleProbe(writeProbeDigits)" title="Проверить, есть ли у номера Telegram или WhatsApp">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#search"/></svg>
+            <span>Возможный контакт</span>
+          </button>
+          <a class="btn" x-show="ownerWrite" :href="ownerWrite?.href" target="_blank" rel="noopener">
+            <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#send"/></svg>
+            <span x-text="ownerWrite?.label"></span>
+          </a>
+          <button type="button" class="btn" @click="copy(cardMessage, 'Сообщение скопировано')">
             <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#copy"/></svg>
             <span>Копировать сообщение</span>
           </button>
@@ -657,6 +682,12 @@
             <span>Открыть в 2ГИС</span>
           </a>
           <p class="actions-note muted small" x-text="'Канал: ' + card.row['Канал'] + ' · ' + card.row['Писать сюда']"></p>
+          <p class="actions-note small probe-links" x-show="writeProbeDigits && probeOpen[writeProbeDigits]">
+            <span class="muted">Проверить номер:</span>
+            <template x-for="l in probeLinks(writeProbeDigits)" :key="l.title">
+              <a :href="l.href" target="_blank" rel="noopener" x-text="l.title"></a>
+            </template>
+          </p>
         </div>
 
         <!-- Работа с клиентом, first in the card: message and hook; on «Сохранённые лиды» and «Клиенты» also status
@@ -733,8 +764,13 @@
             </template>
 
             <div class="sub-sec">
-              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('message')" @click="toggleSection('message')"><span class="chev" aria-hidden="true"></span>Сообщение</button></h4>
-              <p class="message sec-body" x-show="isOpen('message')" x-text="card.row['Сообщение']"></p>
+              <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('message')" @click="toggleSection('message')"><span class="chev" aria-hidden="true"></span>Сообщение</button>
+                <button type="button" class="icon-btn" @click="copy(cardMessage, 'Сообщение скопировано')"
+                        aria-label="Копировать сообщение" title="Копировать сообщение">
+                  <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#copy"/></svg>
+                </button></h4>
+              <p class="message sec-body" x-show="isOpen('message')" x-text="cardMessage"></p>
+              <p class="muted small sec-body" x-show="isOpen('message') && card.demo_message && !crm?.demo_url">Ссылки на демо нет — впишите её в «Демо-приложении» или нажмите «Проработать лиды».</p>
             </div>
 
             <div class="sub-sec">
@@ -805,6 +841,17 @@
                       <span :class="c.label_source" x-text="c.label"></span>
                       <span class="default-note" x-show="c.label_source === 'default'">· по умолчанию</span>
                     </div>
+                    <template x-if="probeDigits(c)">
+                      <div class="probe">
+                        <button type="button" class="link" :aria-expanded="!!probeOpen[probeDigits(c)]"
+                                @click="toggleProbe(probeDigits(c))" title="Проверить, есть ли у номера Telegram или WhatsApp">Возможный контакт</button>
+                        <span class="probe-links" x-show="probeOpen[probeDigits(c)]">
+                          <template x-for="l in probeLinks(probeDigits(c))" :key="l.title">
+                            <a :href="l.href" target="_blank" rel="noopener" x-text="l.title"></a>
+                          </template>
+                        </span>
+                      </div>
+                    </template>
                   </div>
                 </li>
               </template>
