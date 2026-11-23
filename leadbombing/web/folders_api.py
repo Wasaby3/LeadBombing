@@ -15,7 +15,7 @@ from ..logger import logger
 from ..paths import user_path
 from .leads_api import _SLUG_RE, export_args, run_export, slugs_arg
 from .folder_slugs import folder_slugs, with_slug
-from .lead_crm import parse_patch
+from .lead_crm import parse_message_template, parse_patch
 from .leads_job import LeadsJob, export_raw
 from .supabase import SessionExpired, StoreError
 
@@ -163,9 +163,25 @@ def register(app: Any, job: LeadsJob) -> None:
             if not found or not folder:
                 return fail('Лид не найден', 404)
             sphere = get_sphere(folder['sphere'], folder['cities'], folder['query'])
-            # the UI puts the lead's current demo link in place of NO_DEMO_URL, so a changed link shows at once
-            return jsonify({**found, 'demo_message': sphere.demo_message(None)})
+            # the folder's «Общее сообщение», else the sphere's; the UI puts the lead's current demo link in place of
+            # NO_DEMO_URL, so a changed link shows at once
+            message = folder.get('message_template') or sphere.demo_message(None)
+            return jsonify({**found, 'demo_message': message})
         return with_store(card)
+
+    @app.route('/api/folders/<int:folder_id>/message', methods=['PUT'])
+    def folders_message(folder_id: int):
+        try:
+            text = parse_message_template((request.get_json(silent=True) or {}).get('text'))
+        except ValueError as e:
+            return fail(str(e))
+
+        def save(store: Any, token: str):
+            if not store.get_folder(token, folder_id):
+                return fail('Папка не найдена', 404)
+            store.update_folder(token, folder_id, {'message_template': text})
+            return jsonify({'ok': True, 'message_template': text})
+        return with_store(save)
 
     @app.route('/api/folders/<int:folder_id>/item/<slug>', methods=['PATCH'])
     def folders_item_update(folder_id: int, slug: str):

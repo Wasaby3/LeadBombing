@@ -479,6 +479,11 @@ tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: va
 .comment-field { width: 100%; min-height: 96px; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--bg); outline: none; line-height: 1.45; }
 .comment-field:focus, .path-row input[type=url]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.message-field { min-height: 200px; }
+.message-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; }
+.message-actions { flex-wrap: wrap; }
+.sec-tools { display: inline-flex; gap: 2px; }  /* icon buttons side by side at the end of a sub-section heading */
+.message-actions .reset { margin-right: auto; }  /* «Вернуть стандартное» stands apart from Отмена / Сохранить */
 .block .row { margin-top: 8px; }
 .delete-zone { border-bottom: 0; padding-bottom: 28px; }
 .btn.danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); background: transparent; }

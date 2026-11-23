@@ -1,7 +1,7 @@
 /* LeadBombing PWA: login, side menu pages (search, leads, clients, profile, settings, docs), search form, live leads
    table, saved lead folders («Сохранённые лиды»), clients («Клиенты»), lead card, export. Alpine.js + Motion.
    The work on a saved lead or client (statuses, priority, comment, demo, «Перевести в клиенты») is in crm.js,
-   «Проработать лиды» (demo URLs of a folder's leads) in work.js. */
+   «Проработать лиды» (demo URLs of a folder's leads) in work.js, a folder's «Общее сообщение» in message.js. */
 const POLL_MS = 900;
 const SAVE_SETTINGS_MS = 800;
 const TOAST_MS = 2600;
@@ -67,6 +67,7 @@ const focusablesIn = (root) => [...root.querySelectorAll(FOCUSABLE)].filter(isVi
 const WINDOWS = {
   selected: ['card', null], deleteOpen: ['deleteDialog', null], clearOpen: ['clearDialog', 'moreBtn'],
   exportOpen: ['exportDialog', null], saveOpen: ['saveDialog', null], workOpen: ['workDialog', null],
+  messageOpen: ['messageDialog', 'moreBtn'],
 };
 
 function loadForm(saved = store.get(FORM_KEY, {})) {
@@ -693,7 +694,8 @@ document.addEventListener('alpine:init', () => {
     },
     saveTint() { store.set(TINT_KEY, this.tintRows); },
 
-    /* A saved bathhouse lead has the message with its demo link (card.demo_message); otherwise the search's message. */
+    /* A saved lead has its folder's «Общее сообщение» or the bathhouse one (card.demo_message) with its own demo link;
+       otherwise the search's message. */
     get cardMessage() {
       if (!this.card) return '';
       if (!this.card.demo_message) return this.card.row['Сообщение'];
@@ -835,5 +837,5 @@ document.addEventListener('alpine:init', () => {
     async openFolder() {
       await api('/api/leads/open-folder', { path: this.exportPath }).catch((e) => this.notify(e.message));
     },
-  }, crmPart(), workPart()));
+  }, crmPart(), workPart(), messagePart()));
 });

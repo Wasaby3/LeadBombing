@@ -120,6 +120,17 @@ def test_fill_demo_urls_round_trip(token):
     assert store.folder_card(token, folder_id, 'a')['crm']['demo_url'] == 'https://demo.example/s/a'
 
 
+def test_folder_message_round_trip(token):
+    folder_id = store.create_folder(token, {'name': 'Сообщение', 'sphere': SPHERE, 'query': '', 'cities': []})
+    assert store.get_folder(token, folder_id)['message_template'] is None
+
+    store.update_folder(token, folder_id, {'message_template': 'Привет! [ссылка на демо]'})
+
+    assert store.get_folder(token, folder_id)['message_template'] == 'Привет! [ссылка на демо]'
+    store.update_folder(token, folder_id, {'message_template': None})
+    assert store.get_folder(token, folder_id)['message_template'] is None
+
+
 def test_anonymous_requests_see_nothing():
     r = requests.get(f'{store._url}/rest/v1/leads', headers={'apikey': store._key}, timeout=10)
     assert r.status_code in (401, 403)

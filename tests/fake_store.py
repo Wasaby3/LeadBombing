@@ -105,7 +105,8 @@ class FakeStore:
         self._write(token)
         folder_id = next(self._ids)
         self.folders[folder_id] = {'id': folder_id, 'created_at': f'2026-11-17T00:00:{folder_id:02d}',
-                                   'demo_base_url': None, 'demo_filled_at': None, 'removed_worked': 0, **folder}
+                                   'demo_base_url': None, 'demo_filled_at': None, 'removed_worked': 0,
+                                   'message_template': None, **folder}
         self.folder_items[folder_id] = {}
         return folder_id
 

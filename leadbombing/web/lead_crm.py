@@ -10,13 +10,16 @@ A lead becomes a client only through the store's `make_client` (status «Куп�
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from typing import Any, Callable, Optional
+
+from ..leads.spheres import NO_DEMO_URL
 
 STATUSES = ('not_written', 'written', 'in_progress', 'almost', 'bought', 'refused')
 NOT_WRITTEN = STATUSES[0]  # «Ещё не написал»: any other status counts in «Написали»
 CLIENT_STATUSES = ('ok', 'question', 'bug')  # «Всё ок», «Есть вопрос», «Срочный баг»
 MAX_PRIORITY = 5  # 0 not set, 1 very low … 5 very high (see leads/booking.py for the automatic one)
 MAX_COMMENT = 5000
+MAX_MESSAGE = 5000  # a folder's «Общее сообщение» (folders.message_template)
 MAX_URL = 2000
 MAX_SLUG = 60  # a folder slug (leads_api._SLUG_RE); the base URL leaves room for "/<slug>" within MAX_URL
 MAX_CONTACTED = 50
@@ -98,6 +101,21 @@ def parse_base_url(value: Any) -> str:
     if len(url) + 1 + MAX_SLUG > MAX_URL:
         raise ValueError('Адрес демо-приложения слишком длинный')
     return url
+
+
+def parse_message_template(value: Any) -> Optional[str]:
+    """A folder's «Общее сообщение» with the demo link's place marked by NO_DEMO_URL; None (the sphere's message) for
+    an empty text; ValueError with a Russian message otherwise."""
+    if not isinstance(value, str):
+        raise ValueError('Сообщение должно быть текстом')
+    text = value.strip()
+    if not text:
+        return None
+    if len(text) > MAX_MESSAGE:
+        raise ValueError(f'Сообщение длиннее {MAX_MESSAGE} символов')
+    if NO_DEMO_URL not in text:
+        raise ValueError(f'Укажите место ссылки на демо: {NO_DEMO_URL} — кнопка «Вставить ссылку на демо»')
+    return text
 
 
 _PARSERS: dict[str, Callable[[Any], dict]] = {

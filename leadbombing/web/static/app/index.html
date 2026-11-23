@@ -13,13 +13,14 @@
 <script src="/static/app/vendor/motion-11.11.13.js"></script>
 <script src="/static/app/crm.js"></script>
 <script src="/static/app/work.js"></script>
+<script src="/static/app/message.js"></script>
 <script src="/static/app/app.js"></script>
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></symbol></svg>
 <a class="skip-link" href="#main">Перейти к содержимому</a>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -220,12 +221,17 @@
           <span x-text="picked.length ? 'Выгрузить выбранные' : 'Выгрузить'"></span>
           <span class="badge" x-text="exportCount"></span>
         </button>
-        <div class="more" x-show="onSearch || (onLeads && exportPath)" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
+        <div class="more" x-show="onSearch || (onLeads && (exportPath || folderId))" @click.outside="moreOpen = false" @keydown.escape.stop="closeMore()">
           <button type="button" class="icon-btn" x-ref="moreBtn" aria-haspopup="menu" :aria-expanded="moreOpen"
                   aria-label="Ещё действия" title="Ещё действия" @click="toggleMore()">
             <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#ellipsis"/></svg>
           </button>
           <div class="menu" role="menu" x-ref="moreMenu" x-show="moreOpen" x-transition.origin.top.right>
+            <button type="button" role="menuitem" class="menu-item" x-show="onLeads && folderId"
+                    @click="moreOpen = false; openMessage()">
+              <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#message-square-text"/></svg>
+              <span>Общее сообщение</span>
+            </button>
             <button type="button" role="menuitem" class="menu-item" x-show="exportPath" :title="exportPath"
                     @click="moreOpen = false; openFolder()">
               <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#folder-open"/></svg>
@@ -590,6 +596,14 @@
         и <code>#</code>. Ссылки, вписанные вручную, и клиенты не меняются; ссылки, проставленные раньше,
         пересобираются по новому адресу. Папка запоминает адрес: при следующем открытии окно уже заполнено и пишет,
         когда ссылки проставляли. В итоге уведомление скажет, скольким лидам проставлено и сколько оставлено со своей ссылкой.</p>
+      <p><b>Общее сообщение</b>: пункт в меню «Ещё» над таблицей папки и значок в разделе «Сообщение» карточки. Один
+        текст для «Сообщения» всех лидов папки (и её клиентов). Место ссылки на демо отмечают меткой
+        <code>[ссылка на демо]</code> (кнопка «Вставить ссылку на демо» ставит её туда, где курсор); в карточке каждого
+        лида на её месте встаёт его собственная ссылка из «Демо-приложения», а пока ссылки нет, видна метка и подсказка.
+        Без метки сообщение не сохраняется, длина до 5000 символов. «Вернуть стандартное» (или пустой текст) возвращает
+        сообщение сферы: у бань встроенное сообщение с демо, у остальных сфер сообщение из поиска. Окно открывается с
+        текущим общим сообщением, а если его нет, с сообщением открытой карточки. В файлы выгрузки оно
+        <b>не попадает</b>.</p>
       <p>Старые статусы переведены: «Новый» → «Ещё не написал», «Ожидаем ответ» и «Не ответил» → «Написал», «Слился» →
         «Отказался», «Наш клиент» → «Купил» и сразу в клиенты.</p>
       <p>Разделы и подразделы карточки (на обеих страницах) сворачиваются кликом по заголовку, значок в шапке
@@ -765,10 +779,15 @@
 
             <div class="sub-sec">
               <h4><button type="button" class="sec-btn" :aria-expanded="isOpen('message')" @click="toggleSection('message')"><span class="chev" aria-hidden="true"></span>Сообщение</button>
+                <span class="sec-tools">
+                <button type="button" class="icon-btn" x-show="onLeads && cardFolder === folderId" @click="openMessage()"
+                        aria-label="Изменить общее сообщение папки" title="Изменить общее сообщение папки">
+                  <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#message-square-text"/></svg>
+                </button>
                 <button type="button" class="icon-btn" @click="copy(cardMessage, 'Сообщение скопировано')"
                         aria-label="Копировать сообщение" title="Копировать сообщение">
                   <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#copy"/></svg>
-                </button></h4>
+                </button></span></h4>
               <p class="message sec-body" x-show="isOpen('message')" x-text="cardMessage"></p>
               <p class="muted small sec-body" x-show="isOpen('message') && card.demo_message && !crm?.demo_url">Ссылки на демо нет — впишите её в «Демо-приложении» или нажмите «Проработать лиды».</p>
             </div>
@@ -986,6 +1005,37 @@
       <button type="submit" class="btn primary" :disabled="working || !workForm.baseUrl.trim()">
         <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#wand-sparkles"/></svg>
         <span x-text="working ? 'Прорабатываем…' : `Проработать ${exportCount} ${leadsWord(exportCount)}`"></span>
+      </button>
+    </div>
+  </form>
+
+  <!-- «Общее сообщение»: one message for every lead card of the folder, each with its own demo link (message.js) -->
+  <div class="scrim" x-show="messageOpen" x-transition.opacity @click="messageOpen = false"></div>
+  <form class="modal" x-show="messageOpen" x-transition x-ref="messageDialog" role="dialog" aria-modal="true"
+        aria-labelledby="message-title" @submit.prevent="!savingMessage && saveMessage()" @keydown.tab="trapTab($event)" novalidate>
+    <h2 id="message-title">Общее сообщение</h2>
+    <p class="muted">Этот текст будет в «Сообщении» каждого лида папки <b x-text="folder?.name"></b>. На месте
+      <code>[ссылка на демо]</code> у каждого лида встанет его собственная ссылка на демо. В выгрузку сообщение не попадает.</p>
+    <label class="field" for="message-text"><span>Текст сообщения</span></label>
+    <textarea class="comment-field message-field" id="message-text" name="message-template" rows="10" maxlength="5000"
+              x-ref="messageField" x-model="messageForm.text" data-autofocus
+              placeholder="Здравствуйте! Собрал вам онлайн-запись: [ссылка на демо]…"
+              :aria-invalid="!!messageForm.error" aria-describedby="message-error message-note"
+              @input="messageForm.error = ''"></textarea>
+    <p class="field-error" id="message-error" role="alert" x-show="messageForm.error" x-text="messageForm.error"></p>
+    <div class="message-tools">
+      <button type="button" class="btn" @click="insertDemoMark()">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#link"/></svg>
+        <span>Вставить ссылку на демо</span>
+      </button>
+      <span class="muted small" id="message-note">Вставится туда, где стоит курсор</span>
+    </div>
+    <div class="modal-actions message-actions">
+      <button type="button" class="btn ghost reset" x-show="folder?.message_template" :disabled="savingMessage"
+              @click="saveMessage(true)">Вернуть стандартное</button>
+      <button type="button" class="btn ghost" @click="messageOpen = false">Отмена</button>
+      <button type="submit" class="btn primary" :disabled="savingMessage || !messageForm.text.trim()">
+        <span x-text="savingMessage ? 'Сохраняем…' : 'Сохранить сообщение'"></span>
       </button>
     </div>
   </form>
