@@ -8,6 +8,7 @@ services:
     image: leadbombing:${LEADBOMBING_TAG:?LEADBOMBING_TAG не задан}
     container_name: leadbombing
     restart: unless-stopped
+    init: true  # xvfb-run ждёт сигнал от Xvfb, а первым процессом (PID 1) его не получает и зависает
     # Chrome с окном в виртуальном дисплее: так 2GIS видит обычный браузер, а карте есть настоящий экран.
     command: ["xvfb-run", "-a", "-s", "-screen 0 1920x1080x24", "leadbombing"]
     env_file: .env  # SUPABASE_URL, SUPABASE_ANON_KEY, LEADBOMBING_SECRET_KEY — создаёт server.sh setup, chmod 600
