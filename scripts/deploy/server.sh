@@ -22,7 +22,9 @@ TABLES=(user_settings runs leads folders folder_leads)
 
 step() { printf '\n\033[1;33m▶ %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31m✘ %s\033[0m\n' "$*" >&2; exit 1; }
-remote() { ssh -o BatchMode=yes "$HOST" "$@"; }
+# Одно SSH-подключение на всю выкладку: боты долбят порт 22, и sshd (MaxStartups) сбрасывает часть новых подключений.
+SSH_OPTS=(-o BatchMode=yes -o ControlMaster=auto -o "ControlPath=$HOME/.ssh/lb-%C" -o ControlPersist=120)
+remote() { ssh "${SSH_OPTS[@]}" "$HOST" "$@"; }
 psql_remote() { remote "docker exec -i supabase-db psql -U postgres -v ON_ERROR_STOP=1 -q $*"; }
 
 cd "$(git rev-parse --show-toplevel)"
@@ -59,7 +61,7 @@ deploy() {
   step "2/6 Код $sha → $HOST:$APP/src"
   remote "test -f $APP/.env" || die "Сначала scripts/deploy/server.sh setup"
   git archive --format=tar HEAD | remote "rm -rf $APP/src && mkdir -p $APP/src && tar -x -C $APP/src"
-  scp -q deploy/docker-compose.yml "$HOST:$APP/docker-compose.yml"
+  scp -q "${SSH_OPTS[@]}" deploy/docker-compose.yml "$HOST:$APP/docker-compose.yml"
 
   step "3/6 Бэкап схемы leadbombing"
   remote "mkdir -p $APP/backups && docker exec supabase-db pg_dump -U postgres -n leadbombing | gzip > $APP/backups/\$(date +%F-%H%M%S)-$sha.sql.gz \
@@ -144,7 +146,7 @@ import_local() {
   done
 
   step "Фото лидов → $APP/data/folders"
-  rsync -az "$LOCAL_DATA/" "$HOST:$APP/data/folders/"
+  rsync -az -e "ssh ${SSH_OPTS[*]}" "$LOCAL_DATA/" "$HOST:$APP/data/folders/"
   remote "chown -R $APP_UID:$APP_UID $APP/data"
 }
 
