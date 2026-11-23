@@ -4,7 +4,7 @@ import uuid
 import pytest
 import requests
 
-from leadbombing.web.supabase import InvalidCredentials, SessionExpired, store_from_env
+from leadbombing.web.supabase import SCHEMA, InvalidCredentials, SessionExpired, store_from_env
 
 store = store_from_env()
 SPHERE = f'it-{uuid.uuid4().hex[:8]}'
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(not _reachable(), reason='локальный Sup
 def token():
     session = store.sign_in('admin', 'admin')
     yield session.access_token
-    headers = {'apikey': store._key, 'Authorization': f'Bearer {session.access_token}'}
+    headers = {'apikey': store._key, 'Authorization': f'Bearer {session.access_token}', 'Content-Profile': SCHEMA}
     for table in ('leads', 'runs', 'folders'):
         requests.delete(f'{store._url}/rest/v1/{table}', params={'sphere': f'eq.{SPHERE}'}, headers=headers,
                         timeout=10)
@@ -132,8 +132,10 @@ def test_folder_message_round_trip(token):
 
 
 def test_anonymous_requests_see_nothing():
-    r = requests.get(f'{store._url}/rest/v1/leads', headers={'apikey': store._key}, timeout=10)
-    assert r.status_code in (401, 403)
+    for table in ('leads', 'members'):
+        r = requests.get(f'{store._url}/rest/v1/{table}', headers={'apikey': store._key, 'Accept-Profile': SCHEMA},
+                         timeout=10)
+        assert r.status_code in (401, 403), table
 
 
 def test_folder_lead_work_round_trip(token):

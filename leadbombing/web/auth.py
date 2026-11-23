@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from ..logger import logger
 from .account import Account, Accounts
-from .supabase import InvalidCredentials, StoreError
+from .supabase import AccessDenied, InvalidCredentials, StoreError
 
 _PUBLIC_API = '/api/auth/'
 _PROTECTED_PAGES = ('/classic',)
@@ -58,6 +58,8 @@ def register(app: Any, accounts: Accounts) -> None:
             account = accounts.sign_in(login.strip().lower(), password)
         except InvalidCredentials as e:
             return fail(str(e), 401)
+        except AccessDenied as e:
+            return fail(str(e), 403)
         except StoreError as e:
             return fail(str(e), 503)
         session.clear()

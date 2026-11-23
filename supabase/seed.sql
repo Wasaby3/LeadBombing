@@ -17,3 +17,6 @@ values (
   '{"sub": "a0000000-0000-4000-8000-000000000001", "email": "admin@leadbombing.local", "email_verified": true}',
   'email', now(), now(), now()
 );
+
+-- Кабинет открыт только участникам LeadBombing (Auth на сервере общий с другим приложением).
+insert into leadbombing.members (user_id) values ('a0000000-0000-4000-8000-000000000001');

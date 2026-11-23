@@ -10,7 +10,7 @@ from typing import Any, Optional
 from leadbombing.leads.contacts import card_owner_mark
 from leadbombing.leads.firm import firm_id
 from leadbombing.web.lead_crm import DEFAULT_CRM, NOT_WRITTEN, crm_of
-from leadbombing.web.supabase import InvalidCredentials, Session, SessionExpired, StoreError, client_row
+from leadbombing.web.supabase import AccessDenied, InvalidCredentials, Session, SessionExpired, StoreError, client_row
 
 ADMIN_ID = 'a0000000-0000-4000-8000-000000000001'
 TOKEN_TTL_S = 3600
@@ -24,6 +24,7 @@ class FakeStore:
         self.folders: dict[int, dict] = {}
         self.folder_items: dict[int, dict[str, dict]] = {}
         self.refreshed = 0
+        self.members: set[str] = {ADMIN_ID}
         self.fail_writes = False
         self.down = False
         self._tokens = itertools.count(1)
@@ -54,6 +55,8 @@ class FakeStore:
             raise StoreError('База недоступна')
         if (login, password) != ('admin', 'admin'):
             raise InvalidCredentials('Неверный логин или пароль')
+        if ADMIN_ID not in self.members:
+            raise AccessDenied('Этой учётной записи закрыт доступ к LeadBombing')
         return self._session()
 
     def refresh(self, refresh_token: str) -> Session:

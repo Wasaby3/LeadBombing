@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Any
 
 import pydantic
@@ -171,4 +172,6 @@ def main() -> None:
         return
 
     from .web import run_server
-    run_server(port=getattr(args, 'web_port', 8666))
+    # In a container: LEADBOMBING_HOST=0.0.0.0 and LEADBOMBING_OPEN_BROWSER=0 (nobody to open a browser for).
+    run_server(host=os.environ.get('LEADBOMBING_HOST', '127.0.0.1'), port=getattr(args, 'web_port', 8666),
+               open_browser=os.environ.get('LEADBOMBING_OPEN_BROWSER', '1') != '0')

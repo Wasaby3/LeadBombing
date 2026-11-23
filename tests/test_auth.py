@@ -37,6 +37,14 @@ def test_login_with_wrong_password_is_rejected(client):
     assert client.get('/api/leads/meta').status_code == 401
 
 
+def test_login_of_non_member_is_forbidden(client, store):
+    store.members.clear()
+    r = login(client)
+    assert r.status_code == 403
+    assert r.get_json() == {'ok': False, 'error': 'Этой учётной записи закрыт доступ к LeadBombing'}
+    assert client.get('/api/leads/meta').status_code == 401
+
+
 def test_login_rejects_malformed_body(client):
     assert client.post('/api/auth/login', json={'login': '', 'password': 'x'}).status_code == 400
     assert client.post('/api/auth/login', json={'login': 'admin', 'password': ['admin']}).status_code == 400

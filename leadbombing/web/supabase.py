@@ -16,6 +16,8 @@ from ..logger import logger
 from .lead_crm import CRM_FIELDS, NOT_WRITTEN, crm_of
 
 DEFAULT_URL = 'http://127.0.0.1:55321'
+SCHEMA = 'leadbombing'  # own schema: on the server the Supabase is shared with another app
+_READ_METHODS = ('GET', 'HEAD')
 LOGIN_DOMAIN = 'leadbombing.local'  # Supabase logs in by email: login `admin` is admin@leadbombing.local
 _TIMEOUT_S = 10
 _ENV_FILE = '.env.local'
@@ -44,6 +46,10 @@ class InvalidCredentials(StoreError):
 
 class SessionExpired(StoreError):
     pass
+
+
+class AccessDenied(StoreError):
+    """A user of the shared Supabase who is not in leadbombing.members."""
 
 
 @dataclass(frozen=True)
@@ -77,8 +83,16 @@ class SupabaseStore:
     # --- Auth ---
 
     def sign_in(self, login: str, password: str) -> Session:
-        data = self._auth('token?grant_type=password', {'email': login_email(login), 'password': password})
-        return self._session(data)
+        session = self._session(self._auth('token?grant_type=password',
+                                           {'email': login_email(login), 'password': password}))
+        if not self._is_member(session):
+            self.sign_out(session.access_token)
+            raise AccessDenied('Этой учётной записи закрыт доступ к LeadBombing')
+        return session
+
+    def _is_member(self, session: Session) -> bool:
+        return bool(self._request('GET', '/rest/v1/members', session.access_token,
+                                  params={'select': 'user_id', 'user_id': f'eq.{session.user_id}'}))
 
     def refresh(self, refresh_token: str) -> Session:
         return self._session(self._auth('token?grant_type=refresh_token', {'refresh_token': refresh_token}))
@@ -270,6 +284,8 @@ class SupabaseStore:
         headers = {'apikey': self._key, 'Authorization': f'Bearer {token or self._key}'}
         if prefer:
             headers['Prefer'] = prefer
+        if path.startswith('/rest/'):
+            headers['Accept-Profile' if method in _READ_METHODS else 'Content-Profile'] = SCHEMA
         try:
             res = requests.request(method, self._url + path, headers=headers, json=json, params=params,
                                    timeout=_TIMEOUT_S)
