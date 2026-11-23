@@ -19,6 +19,11 @@ const PRIORITIES = [{ id: 5, short: '5', title: 'Очень высокий', ico
   { id: 2, short: '2', title: 'Низкий', icon: 'cloud' }, { id: 1, short: '1', title: 'Очень низкий', icon: 'snowflake' },
   { id: 0, short: 'Нет', title: 'Не задан', icon: 'circle-dashed' }];
 
+/* The gnome (gnome/main.js) cheers on lead work: a status changed, a lead made a client. */
+function announceLead(type, folderId, slug, detail = {}) {
+  window.dispatchEvent(new CustomEvent(type, { detail: { key: `${folderId}/${slug}`, ...detail } }));
+}
+
 function crmPart() {
   return {
     statuses: STATUSES, clientStatuses: CLIENT_STATUSES, priorities: PRIORITIES,
@@ -78,6 +83,9 @@ function crmPart() {
         const { crm } = await api(this.itemUrl(encodeURIComponent(slug)), patch, 'PATCH');
         this.updateRow(slug, folderId, crm);
         if (this.selected === slug) this.crm = crm;
+        if ('status' in patch && crm.status !== before?.status) {
+          announceLead('lb:lead-status', folderId, slug, { from: before?.status, to: crm.status });
+        }
         if (done) this.notify(done);
         return true;
       } catch (e) {
@@ -118,6 +126,7 @@ function crmPart() {
       try {
         await api(`${this.itemUrl(encodeURIComponent(slug))}/client`, {});
         this.dropRow(slug, folderId, { worked: true });  // a client is «Купил»
+        announceLead('lb:lead-client', folderId, slug);
         this.notify(`«${name}» — теперь клиент`);
       } catch (e) {
         if (e.status !== 401) this.notify(`Не переведено в клиенты: ${e.message}`);

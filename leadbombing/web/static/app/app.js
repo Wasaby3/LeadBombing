@@ -87,6 +87,12 @@ function sameForm(a, b) {
     && [...a.cities].sort().join() === [...b.cities].sort().join();
 }
 
+/* The gnome (gnome/main.js) shows for a signed-in user only. */
+function announceUser(login) {
+  window.lbUser = login || null;
+  window.dispatchEvent(new CustomEvent('lb:user', { detail: { login: login || null } }));
+}
+
 const store = {
   get(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -177,6 +183,7 @@ document.addEventListener('alpine:init', () => {
       window.addEventListener('pagehide', () => this.flushSettings());
       document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && this.flushSettings());
       window.addEventListener('popstate', () => this.showPage(pageFromPath()));
+      this.$watch('user', announceUser);
       DARK_QUERY.addEventListener('change', (e) => { this.systemDark = e.matches; });
       try {
         this.user = (await api('/api/auth/me')).login;

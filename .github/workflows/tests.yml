@@ -11,6 +11,21 @@ on:
       - 'leadbombing/data/**'
 
 jobs:
+  test-js:
+    name: Test JS (gnome)
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Test with node --test
+      run: node --test tests/js/*.test.mjs
+
   test-python:
     name: Test Python
 

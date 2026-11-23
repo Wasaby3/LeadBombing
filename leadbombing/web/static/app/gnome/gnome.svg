@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 250" role="img" aria-label="Гном">
+  <ellipse cx="110" cy="240" rx="62" ry="8" fill="#000" opacity=".18"/>
+  <ellipse cx="82" cy="232" rx="24" ry="13" fill="#3a2721"/>
+  <ellipse cx="138" cy="232" rx="24" ry="13" fill="#3a2721"/>
+  <path d="M60 226 C52 190 58 150 78 132 H142 C162 150 168 190 160 226 Z" fill="#3f8a3c"/>
+  <circle cx="58" cy="196" r="9" fill="#f1b79c"/><circle cx="162" cy="196" r="9" fill="#f1b79c"/>
+  <path d="M68 118 C66 160 92 206 110 230 C128 206 154 160 152 118 Z" fill="#f4f2ee"/>
+  <path d="M110 120 C96 110 72 112 64 126 C80 128 98 130 110 126 C122 130 140 128 156 126 C148 112 124 110 110 120 Z" fill="#fff"/>
+  <ellipse cx="110" cy="114" rx="16" ry="13" fill="#f1b79c"/>
+  <path d="M68 104 C70 70 92 30 110 6 C128 30 150 70 152 104 Z" fill="#c8322c"/>
+  <rect x="64" y="96" width="92" height="14" rx="7" fill="#a92822"/>
+</svg>

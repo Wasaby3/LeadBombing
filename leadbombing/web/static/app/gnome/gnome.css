@@ -1,0 +1,37 @@
+/* The gnome in the bottom right corner of every page (gnome/main.js). Above the lead card and its scrim, under dialogs
+   opened over the card and the toast. Only .gnome-hit (the gnome's body) takes clicks: the rest of the box lets them through. */
+.gnome { position: fixed; right: 12px; bottom: 8px; width: 220px; height: 250px; z-index: 22; pointer-events: none;
+  transition: right .3s ease, bottom .3s ease, width .3s ease, height .3s ease; }
+.gnome[hidden] { display: none; }
+.gnome canvas, .gnome .gnome-flat { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gnome-hit { position: absolute; left: 30%; top: 0; bottom: 0; width: 40%; pointer-events: auto; cursor: pointer; touch-action: manipulation; }
+.gnome .gnome-flat { display: none; object-fit: contain; object-position: bottom; pointer-events: auto; cursor: pointer; }
+.gnome.flat .gnome-hit { display: none; }
+.gnome.flat canvas { display: none; }
+.gnome.flat .gnome-flat { display: block; }
+.gnome-bubble { position: absolute; left: 50%; top: 0; transform: translate(-50%, calc(-100% - 6px)); max-width: 240px; width: max-content;
+  padding: 8px 12px; border-radius: 14px; background: var(--surface); color: var(--text); border: 1px solid var(--line);
+  box-shadow: var(--shadow); font-size: 13.5px; font-weight: 550; line-height: 1.35; text-align: center; text-wrap: balance;
+  pointer-events: none; animation: gnome-pop .18s ease-out; }
+.gnome-bubble::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: inherit;
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: translateX(-50%) rotate(45deg); }
+.gnome-bubble[hidden] { display: none; }
+.gnome-bubble[data-mood="angry"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.gnome-bubble[data-mood="happy"] { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+.gnome-bubble[data-mood="sleep"] { color: var(--muted); font-style: italic; font-weight: 500; }
+@keyframes gnome-pop { from { opacity: 0; transform: translate(-50%, calc(-100% + 2px)) scale(.92); } }
+
+/* The lead card takes the right side: the gnome stands just left of it. */
+body:has(aside.card:not([style*="display: none"])) .gnome { right: calc(min(540px, 100vw) + 4px); }
+
+@media (max-width: 760px) {
+  /* Phones: smaller, above the bottom menu; over the full-width lead card it shrinks into the corner. */
+  .gnome { width: 120px; height: 140px; right: 4px; bottom: calc(66px + env(safe-area-inset-bottom)); }
+  .gnome-bubble { max-width: min(220px, calc(100vw - 24px)); font-size: 13px; }
+  body:has(aside.card:not([style*="display: none"])) .gnome { right: 0; bottom: 0; width: 84px; height: 98px; opacity: .92; }
+  /* Over the full-width card the gnome only watches: the card's buttons in that corner stay clickable. */
+  body:has(aside.card:not([style*="display: none"])) :is(.gnome-hit, .gnome-flat) { pointer-events: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gnome, .gnome-bubble { transition: none; animation: none; }
+}

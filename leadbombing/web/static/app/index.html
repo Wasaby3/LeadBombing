@@ -10,11 +10,13 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/static/app/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app/app.css">
+<link rel="stylesheet" href="/static/app/gnome/gnome.css">
 <script src="/static/app/vendor/motion-11.11.13.js"></script>
 <script src="/static/app/crm.js"></script>
 <script src="/static/app/work.js"></script>
 <script src="/static/app/message.js"></script>
 <script src="/static/app/app.js"></script>
+<script type="module" src="/static/app/gnome/main.js"></script>
 <script defer src="/static/app/vendor/alpine-3.14.1.min.js"></script>
 </head>
 <body>
@@ -1079,6 +1081,12 @@
   </div>
 
   <div class="toast" role="status" aria-live="polite" x-show="toast" x-transition x-text="toast"></div>
+</div>
+<div class="gnome" id="gnome" hidden>
+  <div class="gnome-bubble" role="status" aria-live="polite" hidden></div>
+  <canvas role="img" aria-label="Гном-надсмотрщик"></canvas>
+  <div class="gnome-hit" aria-hidden="true"></div>
+  <img class="gnome-flat" src="/static/app/gnome/gnome.svg" alt="Гном-надсмотрщик">
 </div>
 <script>
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
