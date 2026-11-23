@@ -250,6 +250,7 @@ document.addEventListener('alpine:init', () => {
       if (page === this.page) return;
       history.pushState({}, '', `/${page}`);
       this.showPage(page);
+      gnomeHears(`page:${page}`);
     },
     showPage(page) {
       if (page !== this.page) this.restoreForm();  // edits without «Найти лиды» do not outlive the page
@@ -311,6 +312,7 @@ document.addEventListener('alpine:init', () => {
         this.folderId = r.folder.id;
         this.saveOpen = false;
         this.notify(`В папку «${r.folder.name}» сохранено: ${r.saved} ${this.leadsWord(r.saved)}`);
+        gnomeHears('save', { count: r.saved });
       } catch (e) {
         this.notify(e.message);
       } finally {
@@ -330,6 +332,7 @@ document.addEventListener('alpine:init', () => {
       this.theme = theme;
       store.set(THEME_KEY, theme);
       applyTheme(theme);
+      gnomeHears(`theme:${this.currentTheme}`);
     },
     /* The header button picks the other theme explicitly; «Как в системе» stays in Настройки. */
     toggleTheme() { this.setTheme(this.currentTheme === 'dark' ? 'light' : 'dark'); },
@@ -447,6 +450,7 @@ document.addEventListener('alpine:init', () => {
     pickSphere(s) {
       this.form.sphere = s.id;
       this.form.query = s.query;
+      gnomeHears(`sphere:${s.id}`);
     },
     freeSearch() {
       if (!this.running && this.form.sphere !== CUSTOM.id) this.form.sphere = CUSTOM.id;
@@ -530,6 +534,7 @@ document.addEventListener('alpine:init', () => {
       this.searchCleared = false;
       this.rememberSearch();
       this.schedulePoll();
+      gnomeHears('search:start');
     },
 
     /* Continue a stopped or failed run from the city and page where it ended; the table keeps what was found. */
@@ -549,6 +554,7 @@ document.addEventListener('alpine:init', () => {
 
     async stop() {
       this.status = 'stopped';  // the server stops at once; polling picks up the firm that was in progress
+      gnomeHears('search:stop');
       await api('/api/leads/stop', {}).catch((e) => { this.error = e.message; });
       this.schedulePoll();
     },
@@ -564,6 +570,7 @@ document.addEventListener('alpine:init', () => {
       this.leads = []; this.skipped = []; this.picked = []; this.cursor = 0; this.fromAccount = false; this.closeCard();
       this.status = 'idle'; this.params = null; this.resumable = false; this.log = ''; this.error = '';
       this.searchCleared = true;  // leads of earlier runs are not brought back from the account either
+      gnomeHears('search:clear');
       this.resetForm();  // an empty table has no search behind it: the filters start over too
     },
     /* Default filters (bathhouses in Moscow); the Chrome window choice is a display setting and stays. */
@@ -630,12 +637,16 @@ document.addEventListener('alpine:init', () => {
         if (at >= 0) this.leads.splice(at, 1, ev); else this.leads.push(ev);
       }
       this.cursor = s.cursor;
+      const wasRunning = this.running;
       this.status = s.status;
       this.params = s.params;
       this.resumable = s.resumable;
       this.busy = s.busy;
       this.log = (s.log || '').replace(/^\d\d:\d\d:\d\d\s*/, '');
       if (s.error) this.error = s.error;
+      if (wasRunning && !this.running && s.status !== 'stopped') {
+        gnomeHears(s.status === 'done' ? 'search:done' : 'search:error', { count: this.leads.length });
+      }
       if (this.running || this.busy) this.schedulePoll();
       else if (s.status === 'done' && s.events.length) this.notify(`Поиск завершён: ${this.leads.length} ${this.leadsWord(this.leads.length)}`);
     },
@@ -664,6 +675,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     async openCard(slug, folderId = this.folderId) {
+      gnomeHears('card');
       this.selected = slug;
       this.cardFolder = this.onSaved ? folderId : null;
       this.card = null;
@@ -814,6 +826,7 @@ document.addEventListener('alpine:init', () => {
       try {
         await navigator.clipboard.writeText(text);
         this.notify(done);
+        gnomeHears('copy');
       } catch {
         this.notify('Не удалось скопировать — выделите текст вручную');
       }
@@ -842,6 +855,7 @@ document.addEventListener('alpine:init', () => {
         this.saveSettings();
         this.exportOpen = false;
         this.notify(`Выгружено в ${r.path}: новых ${r.added}, обновлено ${r.updated}`);
+        gnomeHears('export');
       } catch (e) {
         this.notify(e.message);
       } finally {

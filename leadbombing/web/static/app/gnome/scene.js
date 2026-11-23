@@ -14,8 +14,14 @@ const WANDER_X = 0.5;          // how far the gnome walks from the centre of its
 const WALK_SPEED = 0.55;        // units per second
 const OFFSTAGE_X = 2.6;         // where it walks to when it leaves
 const EXIT_SPEED = 1.5;         // leaving and coming back are brisk
-const WANDER_MIN_S = 6;
-const WANDER_MAX_S = 14;
+const WANDER_MIN_S = 4;
+const WANDER_MAX_S = 9;
+const GESTURE_MIN_S = 1.5;      // between idle gestures (look around, wave, stretch…)
+const GESTURE_MAX_S = 4;
+/* Idle gestures and how long each lasts, in seconds; 'nod' and 'shake' come when it talks. */
+const GESTURES = { look: 2.4, wave: 2.0, stretch: 1.8, hop: 0.9, tap: 1.6, scratch: 1.8, spin: 1.1 };
+const IDLE_GESTURES = Object.keys(GESTURES);
+const TALK_GESTURES = { nod: 1.1, shake: 1.0 };
 const ANGRY_BASE_S = 1.1;
 const HAPPY_S = 1.2;
 const MAX_DPR = 2;
@@ -81,7 +87,7 @@ function buildBody(parts) {
     return arm;
   });
   parts.root.add(body, ...boots, ...arms);
-  return { body, arms };
+  return { body, arms, boots };
 }
 
 function buildFace(parts) {
@@ -159,7 +165,7 @@ const ease = (current, target, rate, dt) => current + (target - current) * Math.
 /* Moods and moves over time: the loop reads this plain state each frame. */
 function initialMotion(reduced) {
   return { x: 0, targetX: 0, speed: WALK_SPEED, mode: 'idle', modeUntil: 0, anger: 0, nextWanderAt: reduced ? Infinity : 4,
-    onArrive: null, reduced };
+    onArrive: null, reduced, gesture: null, nextGestureAt: reduced ? Infinity : 2, yaw: 0 };
 }
 
 export function createGnomeScene(canvas, { reducedMotion = false, onFrame = () => {} } = {}) {
@@ -198,15 +204,52 @@ export function createGnomeScene(canvas, { reducedMotion = false, onFrame = () =
     set({ targetX: MathUtils.randFloat(-WANDER_X, WANDER_X), speed: WALK_SPEED, nextWanderAt: clock + MathUtils.randFloat(WANDER_MIN_S, WANDER_MAX_S) });
   }
 
+  function startGesture(name, dur) {
+    if (m.reduced) return;
+    set({ gesture: { name, start: clock, dur }, nextGestureAt: clock + dur + MathUtils.randFloat(GESTURE_MIN_S, GESTURE_MAX_S) });
+  }
+
+  function idleGesture(moving) {
+    if (m.mode === 'sleep') return;
+    if (m.gesture && clock - m.gesture.start >= m.gesture.dur) set({ gesture: null });
+    if (m.gesture || moving || m.mode !== 'idle' || clock < m.nextGestureAt) return;
+    const name = IDLE_GESTURES[Math.floor(Math.random() * IDLE_GESTURES.length)];
+    startGesture(name, GESTURES[name]);
+  }
+
   function animate(dt) {
-    if (clock >= m.nextWanderAt) wander();
+    if (clock >= m.nextWanderAt && !m.gesture) wander();
     const timed = m.modeUntil && clock >= m.modeUntil;
     if (timed) set({ mode: 'idle', modeUntil: 0, anger: 0 });
     const moving = Math.abs(m.targetX - m.x) > 0.01 && m.mode !== 'sleep';
     const step = Math.sign(m.targetX - m.x) * Math.min(Math.abs(m.targetX - m.x), m.speed * dt);
     if (moving) set({ x: m.x + step });
     else if (m.onArrive) { const done = m.onArrive; set({ onArrive: null }); done(); }
+    idleGesture(moving);
     pose(dt, moving, step);
+  }
+
+  /* What the current gesture adds this frame: 0 → 1 → 0 over its time (env), and its phase p. */
+  function gestureNow() {
+    if (!m.gesture) return { name: '', p: 0, env: 0 };
+    const p = Math.min(1, (clock - m.gesture.start) / m.gesture.dur);
+    return { name: m.gesture.name, p, env: Math.sin(Math.PI * p) };
+  }
+
+  /* Arm angles [left, right] around z (out/up) and x (forward) for the mood and gesture. */
+  function armTargets(gest, happy, angry) {
+    const still = m.reduced;
+    if (happy && !still) return [[-1.6 - Math.sin(clock * 12) * 0.5, 0], [1.6 + Math.sin(clock * 12 + 1) * 0.5, 0]];
+    if (angry) return [[-0.7, -0.4], [0.7, -0.4]];
+    const rest = [[-0.18, 0], [0.18, 0]];
+    const e = gest.env;
+    switch (gest.name) {
+      case 'wave': return [rest[0], [0.18 + 2.7 * e + Math.sin(clock * 14) * 0.5 * e, -0.3 * e]];
+      case 'stretch': return [[-0.18 - 2.8 * e, 0], [0.18 + 2.8 * e, 0]];
+      case 'scratch': return [[-0.18 + 1.1 * e + Math.sin(clock * 22) * 0.2 * e, -1.3 * e], rest[1]];
+      case 'tap': return [[-0.5 * e, 0], [0.5 * e, 0]];
+      default: return rest;
+    }
   }
 
   function pose(dt, moving, step) {
@@ -215,28 +258,38 @@ export function createGnomeScene(canvas, { reducedMotion = false, onFrame = () =
     const asleep = m.mode === 'sleep';
     const angry = m.mode === 'angry';
     const happy = m.mode === 'happy';
+    const gest = gestureNow();
     const shake = angry && !still ? Math.sin(clock * 42) * 0.05 * m.anger : 0;
-    const hop = happy && !still ? Math.abs(Math.sin(clock * 9)) * 0.28 : 0;
+    const hop = (happy && !still ? Math.abs(Math.sin(clock * 9)) * 0.28 : 0)
+      + (gest.name === 'hop' ? Math.abs(Math.sin(gest.p * Math.PI * 2)) * 0.3 : 0)
+      + (gest.name === 'stretch' ? 0.1 * gest.env : 0)
+      + (gest.name === 'tap' ? Math.abs(Math.sin(clock * 16)) * 0.04 * gest.env : 0);
     const stomp = angry && !still ? Math.abs(Math.sin(clock * 14)) * 0.06 * m.anger : 0;
     const bob = moving && !still ? Math.abs(Math.sin(clock * 11)) * 0.06 : 0;
     r.position.set(m.x + shake, hop + stomp + bob, 0);
     g.shadow.position.x = m.x;
     g.shadow.scale.setScalar(1 - (hop + bob) * 0.8);
-    const facing = moving ? Math.sign(step) * 0.7 : 0;
-    r.rotation.y = ease(r.rotation.y, facing, 6, dt);
-    r.rotation.z = angry && !still ? Math.sin(clock * 30) * 0.04 * m.anger : ease(r.rotation.z, moving && !still ? Math.sin(clock * 11) * 0.06 : 0, 8, dt);
-    r.rotation.x = ease(r.rotation.x, asleep ? 0.16 : 0, 2, dt);
+    m.yaw = ease(m.yaw, moving ? Math.sign(step) * 0.7 : 0, 6, dt);
+    const gestureYaw = gest.name === 'look' ? Math.sin(gest.p * Math.PI * 2) * 1.05
+      : gest.name === 'spin' ? gest.p * Math.PI * 2
+        : gest.name === 'shake' ? Math.sin(clock * 16) * 0.3 * gest.env : 0;
+    r.rotation.y = m.yaw + gestureYaw;
+    r.rotation.z = angry && !still ? Math.sin(clock * 30) * 0.04 * m.anger
+      : ease(r.rotation.z, moving && !still ? Math.sin(clock * 11) * 0.06 : 0, 8, dt);
+    const nod = gest.name === 'nod' ? Math.sin(gest.p * Math.PI * 4) * 0.13 : 0;
+    r.rotation.x = ease(r.rotation.x, asleep ? 0.16 : 0, 2, dt) + nod;
     const breathe = still ? 0 : Math.sin(clock * (asleep ? 1.1 : 2.2)) * (asleep ? 0.025 : 0.012);
-    g.body.scale.set(1 - breathe * 0.5, 1 + breathe, 1 - breathe * 0.5);
+    const stretchUp = gest.name === 'stretch' ? 0.1 * gest.env : 0;
+    g.body.scale.set(1 - breathe * 0.5, 1 + breathe + stretchUp, 1 - breathe * 0.5);
     const tipSway = still ? 0 : Math.sin(clock * 1.4) * 0.05;
     const tipTarget = asleep ? -0.75 : angry && !still ? Math.sin(clock * 36) * 0.18 : tipSway;
     g.tip.rotation.z = angry ? tipTarget : ease(g.tip.rotation.z, tipTarget, asleep ? 1.5 : 5, dt);
     g.noseMat.color.lerp(angry ? angryNose : baseNose, Math.min(1, 6 * dt));
-    g.arms.forEach((arm, i) => {
-      const side = i ? 1 : -1;
-      const wave = happy && !still ? Math.sin(clock * 12 + i) * 0.5 - 1.6 : angry ? -0.5 : 0;
-      arm.rotation.z = ease(arm.rotation.z, side * (0.18 - wave * (happy || angry ? 1 : 0)), 8, dt);
+    armTargets(gest, happy, angry).forEach(([z, x], i) => {
+      g.arms[i].rotation.z = ease(g.arms[i].rotation.z, z, 8, dt);
+      g.arms[i].rotation.x = ease(g.arms[i].rotation.x, x, 8, dt);
     });
+    g.boots[0].rotation.x = gest.name === 'tap' ? -Math.abs(Math.sin(clock * 16)) * 0.6 * gest.env : 0;
   }
 
   /* Where the gnome is, in canvas pixels; reported only when it moved by a pixel, so the page is not re-laid out each frame. */
@@ -278,11 +331,16 @@ export function createGnomeScene(canvas, { reducedMotion = false, onFrame = () =
     resume,
     mood(mood) {
       if (m.mode === 'sleep' || m.mode === 'angry') return;
-      if (mood === 'happy') set({ mode: 'happy', modeUntil: clock + HAPPY_S });
+      if (mood === 'happy') { set({ mode: 'happy', modeUntil: clock + HAPPY_S, gesture: null }); return; }
+      const name = mood === 'grumpy' || mood === 'sad' ? 'shake' : 'nod';
+      startGesture(name, TALK_GESTURES[name]);
     },
-    sleep() { set({ mode: 'sleep', modeUntil: 0, targetX: m.x, nextWanderAt: Infinity }); },
-    wake() { set({ mode: 'idle', modeUntil: 0, nextWanderAt: m.reduced ? Infinity : clock + WANDER_MIN_S }); },
-    angry(level) { set({ mode: 'angry', anger: level, modeUntil: clock + ANGRY_BASE_S + level * 0.4, targetX: m.x }); },
+    sleep() { set({ mode: 'sleep', modeUntil: 0, targetX: m.x, nextWanderAt: Infinity, gesture: null, nextGestureAt: Infinity }); },
+    wake() {
+      set({ mode: 'idle', modeUntil: 0, nextWanderAt: m.reduced ? Infinity : clock + WANDER_MIN_S,
+        nextGestureAt: m.reduced ? Infinity : clock + GESTURE_MIN_S });
+    },
+    angry(level) { set({ mode: 'angry', anger: level, modeUntil: clock + ANGRY_BASE_S + level * 0.4, targetX: m.x, gesture: null }); },
     async leave() {
       set({ mode: 'idle', modeUntil: 0, nextWanderAt: Infinity });
       await walkTo(OFFSTAGE_X, EXIT_SPEED);

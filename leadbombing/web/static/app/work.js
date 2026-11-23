@@ -38,6 +38,7 @@ function workPart() {
         this.workOpen = false;
         const kept = r.kept ? `, со своей ссылкой оставлено: ${r.kept}` : '';
         this.notify(`Ссылка на демо проставлена: ${r.filled} ${this.leadsWord(r.filled)}${kept}`);
+        gnomeHears('work');
         if (this.selected && this.cardFolder === this.folderId) await this.openCard(this.selected);
       } catch (e) {
         if (e.status !== 401) this.workForm.error = e.message;

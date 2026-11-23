@@ -1,5 +1,6 @@
 /* The gnome in the bottom right corner of every page: wires the brain (brain.js) to the page, the 3D scene and the bubble.
    It listens to the app: lb:user (login/logout, from app.js), lb:lead-status and lb:lead-client (from crm.js),
+   lb:action (what the user does: a sphere, a search, a page… see actions.js),
    the secret phrases in any search field, and the user's activity. It remembers per login what brain.memoryOf says. */
 import { initialState, reduce, memoryOf } from './brain.js';
 import { parseCommand } from './commands.js';
@@ -150,6 +151,7 @@ const onPoke = () => dispatch({ type: 'poke' });
 window.addEventListener('lb:user', (e) => onUser(e.detail?.login || null));
 window.addEventListener('lb:lead-status', (e) => dispatch({ type: 'status', ...e.detail }));
 window.addEventListener('lb:lead-client', (e) => dispatch({ type: 'client', ...e.detail }));
+window.addEventListener('lb:action', (e) => e.detail?.action && dispatch({ ...e.detail, type: 'action' }));
 document.addEventListener('input', onSearchInput, true);
 for (const type of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart']) {
   window.addEventListener(type, onActivity, { passive: true });

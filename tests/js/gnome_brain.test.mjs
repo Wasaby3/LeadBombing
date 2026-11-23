@@ -64,7 +64,7 @@ test('no lead work for the nag time makes the gnome nag, and not again right awa
   const nag = reduce(state, { type: 'tick', now: T0 + TIMING.NAG_AFTER_MS }, rnd);
   assert.equal(says(nag.effects)[0].category, 'nag');
   const soon = reduce(nag.state, { type: 'tick', now: T0 + TIMING.NAG_AFTER_MS + MIN }, rnd);
-  assert.equal(says(soon.effects).length, 0);
+  assert.ok(says(soon.effects).every((e) => e.category !== 'nag'));
 });
 
 test('lead work resets the nag timer', () => {

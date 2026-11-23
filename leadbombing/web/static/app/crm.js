@@ -19,6 +19,12 @@ const PRIORITIES = [{ id: 5, short: '5', title: 'Очень высокий', ico
   { id: 2, short: '2', title: 'Низкий', icon: 'cloud' }, { id: 1, short: '1', title: 'Очень низкий', icon: 'snowflake' },
   { id: 0, short: 'Нет', title: 'Не задан', icon: 'circle-dashed' }];
 
+/* The gnome (gnome/main.js) comments on what the user does: an action id from gnome/actions.js, like 'search:start'.
+   crm.js is the first app script, so app.js, work.js and message.js use it too. */
+function gnomeHears(action, detail = {}) {
+  window.dispatchEvent(new CustomEvent('lb:action', { detail: { ...detail, action } }));
+}
+
 /* The gnome (gnome/main.js) cheers on lead work: a status changed, a lead made a client. */
 function announceLead(type, folderId, slug, detail = {}) {
   window.dispatchEvent(new CustomEvent(type, { detail: { key: `${folderId}/${slug}`, ...detail } }));
@@ -98,7 +104,10 @@ function crmPart() {
     },
     setStatus(id) { if (this.crm.status !== id) this.saveCrm({ status: id }, { instant: true }); },
     setClientStatus(id) { if (this.crm.client_status !== id) this.saveCrm({ client_status: id }, { instant: true }); },
-    setPriority(id) { this.saveCrm({ priority: id }, { instant: true }); },
+    setPriority(id) {
+      this.saveCrm({ priority: id }, { instant: true });
+      gnomeHears('priority', { value: id });
+    },
     isContacted(c) { return (this.crm?.contacted || []).some((x) => x.title === c.title && x.value === c.value); },
     toggleContacted(c) {
       const others = this.crm.contacted.filter((x) => !(x.title === c.title && x.value === c.value));
@@ -107,13 +116,17 @@ function crmPart() {
     },
     get commentChanged() { return this.crm && this.draft.comment.trim() !== this.crm.comment; },
     async saveComment() {
-      if (await this.saveCrm({ comment: this.draft.comment }, { done: 'Комментарий сохранён' })) this.draft.comment = this.crm.comment;
+      if (!await this.saveCrm({ comment: this.draft.comment }, { done: 'Комментарий сохранён' })) return;
+      this.draft.comment = this.crm.comment;
+      gnomeHears('comment');
     },
     get demoChanged() { return this.crm && this.draft.demoUrl.trim() !== (this.crm.demo_url || ''); },
     get demoUrlValid() { return !this.draft.demoUrl.trim() || /^https?:\/\/\S+$/i.test(this.draft.demoUrl.trim()); },
     async saveDemo() {
       const done = this.draft.demoUrl.trim() ? 'Ссылка на демо сохранена' : 'Ссылка на демо удалена';
-      if (await this.saveCrm({ demo_url: this.draft.demoUrl }, { done })) this.draft.demoUrl = this.crm.demo_url || '';
+      if (!await this.saveCrm({ demo_url: this.draft.demoUrl }, { done })) return;
+      this.draft.demoUrl = this.crm.demo_url || '';
+      if (this.draft.demoUrl) gnomeHears('demo');
     },
 
     /* «Перевести в клиенты»: the lead becomes a client («Купил», «Всё ок») and moves to «Клиенты». */
@@ -146,6 +159,7 @@ function crmPart() {
         await api(this.itemUrl(encodeURIComponent(slug)), undefined, 'DELETE');
         this.dropRow(slug, folderId, { worked });
         this.notify(done);
+        gnomeHears('delete');
       } catch (e) {
         this.deleteOpen = false;
         if (e.status !== 401) this.notify(`Не удалено: ${e.message}`);

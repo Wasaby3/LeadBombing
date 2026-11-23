@@ -44,6 +44,7 @@ function messagePart() {
         this.folders = this.folders.map((f) => (f.id === this.folderId ? { ...f, message_template: r.message_template } : f));
         this.messageOpen = false;
         this.notify(r.message_template ? 'Общее сообщение сохранено' : 'Вернули стандартное сообщение');
+        gnomeHears('message');
         if (this.selected && this.cardFolder === this.folderId) await this.openCard(this.selected);
       } catch (e) {
         if (e.status !== 401) this.messageForm = { ...this.messageForm, error: e.message };

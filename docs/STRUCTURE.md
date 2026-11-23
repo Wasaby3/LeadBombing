@@ -23,7 +23,7 @@ leadbombing/            пакет
     classic_api.py, job.py, history.py   старый дашборд /classic
     static/app/           фронтенд без сборки (Alpine.js, app.js, index.html, app.css, sw.js;
                           vendor/icons.svg — спрайт иконок Lucide)
-    static/app/gnome/     гном в правом нижнем углу: brain.js (логика), phrases.js, commands.js,
+    static/app/gnome/     гном в правом нижнем углу: brain.js (логика), phrases.js, actions.js, commands.js,
                           scene.js (3D на vendor/three-gnome-*.min.js), bubble.js, main.js, gnome.css
   data/                 списки городов и рубрик
 supabase/               config.toml, миграции (таблицы аккаунтов, запусков, лидов, папок, работа с лидом), seed.sql

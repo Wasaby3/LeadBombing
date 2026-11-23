@@ -1,6 +1,6 @@
 /* Everything the gnome says. Each category is a list; the brain never repeats the last phrase of a category. */
 
-const pluralLeads = (n) => {
+export const leadsWord = (n) => {
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod10 === 1 && mod100 !== 11) return 'лид';
@@ -83,6 +83,14 @@ export const PHRASES = Object.freeze({
     'Без меня всё развалилось, да?',
     'Так, где тут у вас лиды?',
   ],
+  stare: [
+    'Чё завис, работничек?',
+    'Алё, ты тут?',
+    'Экран тебя загипнотизировал?',
+    'Моргни, если живой',
+    'Мышку уронил?',
+    'Задумался? Не надорвись',
+  ],
   alreadyHere: [
     'Я и так тут, глаза протри',
     'Куда вернуться? Я никуда не уходил',
@@ -106,7 +114,7 @@ const FIFTH = [
 export function milestonePhrases(n) {
   if (n === 1) return FIRST;
   if (n === 5) return FIFTH;
-  const leads = `${n} ${pluralLeads(n)}`;
+  const leads = `${n} ${leadsWord(n)}`;
   return [
     `Уже ${leads} за сегодня! Горжусь тобой`,
     `${leads}! Вот это темп, старина`,

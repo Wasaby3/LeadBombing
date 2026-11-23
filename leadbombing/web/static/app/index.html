@@ -675,7 +675,8 @@
         </div>
 
         <div class="actions">
-          <a class="btn primary" :href="writeHref" :target="writeHref.startsWith('http') ? '_blank' : null" rel="noopener">
+          <a class="btn primary" :href="writeHref" :target="writeHref.startsWith('http') ? '_blank' : null" rel="noopener"
+             @click="gnomeHears('write')">
             <svg class="icon" aria-hidden="true" x-show="writeKind !== 'phone'"><use href="/static/app/vendor/icons.svg#send"/></svg>
             <svg class="icon" aria-hidden="true" x-show="writeKind === 'phone'"><use href="/static/app/vendor/icons.svg#phone"/></svg>
             <span x-text="writeLabel"></span>
