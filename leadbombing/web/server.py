@@ -104,8 +104,14 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
     return app
 
 
-def run_server(host: str = '127.0.0.1', port: int = 8666, open_browser: bool = True) -> None:
-    """Run the dashboard server (blocking)."""
+def run_server(host: Optional[str] = None, port: int = 8666, open_browser: Optional[bool] = None) -> None:
+    """Run the dashboard server (blocking).
+
+    In a container LEADBOMBING_HOST=0.0.0.0 and LEADBOMBING_OPEN_BROWSER=0 (nobody to open a browser for).
+    """
+    host = host or os.environ.get('LEADBOMBING_HOST', '127.0.0.1')
+    if open_browser is None:
+        open_browser = os.environ.get('LEADBOMBING_OPEN_BROWSER', '1') != '0'
     app = create_app()
     url = f'http://{host}:{port}/'
     logger.info('Веб-интерфейс запущен: %s', url)
