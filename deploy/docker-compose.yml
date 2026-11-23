@@ -1,5 +1,5 @@
 # LeadBombing на VPS рядом с bani-pwa: /opt/leadbombing/docker-compose.yml (кладёт scripts/deploy/server.sh).
-# Наружу ничего не открыто: порт только на 127.0.0.1 (доступ — SSH-туннель). Supabase — общий стек bani-pwa,
+# По умолчанию наружу ничего не открыто: порт только на 127.0.0.1 (доступ — SSH-туннель). Supabase — общий стек bani-pwa,
 # к его API контейнер ходит по внутренней сети docker (api-gw:8000), схема своя — leadbombing.
 name: leadbombing
 
@@ -16,7 +16,8 @@ services:
       LEADBOMBING_HOST: 0.0.0.0
       LEADBOMBING_OPEN_BROWSER: "0"
     ports:
-      - "127.0.0.1:8666:8666"
+      # Только 127.0.0.1 (SSH-туннель); LEADBOMBING_BIND=0.0.0.0 в /opt/leadbombing/.env — открыть по IP без домена.
+      - "${LEADBOMBING_BIND:-127.0.0.1}:8666:8666"
     volumes:
       - ./data:/home/app/.local/share/leadbombing  # фото лидов папок, запуски поиска
     mem_limit: 1536m  # пробный поиск: пик 1.0 ГБ; при нехватке падает этот контейнер, а не бани
