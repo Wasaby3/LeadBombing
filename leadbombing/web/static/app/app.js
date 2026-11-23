@@ -188,11 +188,18 @@ document.addEventListener('alpine:init', () => {
     },
 
     async boot() {
-      try {
-        this.meta = await api('/api/leads/meta');
-      } catch (e) {
-        this.error = 'Сервер не отвечает. Запустите leadbombing и обновите страницу.';
-        return;
+      // The network can drop a single request (VPN): retry before giving up, or the form is left without cities.
+      for (let attempt = 1; ; attempt++) {
+        try {
+          this.meta = await api('/api/leads/meta');
+          break;
+        } catch (e) {
+          if (attempt === 3) {
+            this.error = 'Сервер не отвечает. Запустите leadbombing и обновите страницу.';
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
       await this.loadSettings();
       if (!this.sphere) this.form.sphere = 'bani';
