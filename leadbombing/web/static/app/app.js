@@ -161,7 +161,7 @@ document.addEventListener('alpine:init', () => {
     meta: { spheres: [], cities: [], criteria: [] },
     form: loadForm(),
     searchForm: loadForm(),  // what the table was searched with; `form` returns to it unless «Найти лиды» is pressed
-    citiesOpen: false, sphereMenuOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
+    citiesOpen: false, sphereMenuOpen: false, criteriaOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
     status: 'idle', error: '', log: '', cursor: 0,
     params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
     leads: [], skipped: [], filter: '', showSkipped: false, _phoneSearchTimer: null,
@@ -406,6 +406,7 @@ document.addEventListener('alpine:init', () => {
       this.form = cloneForm(this.searchForm);
       this.citiesOpen = false;
       this.sphereMenuOpen = false;
+      this.criteriaOpen = false;
     },
     get formChanged() { return !sameForm(this.form, this.searchForm); },
     saveSettings() {
@@ -473,9 +474,6 @@ document.addEventListener('alpine:init', () => {
     /* 'profile' has no effect on the custom (free search) sphere — no rubric/exclude filter is registered for it. */
     get visibleCriteria() {
       return this.meta.criteria.filter((c) => c.id !== 'profile' || this.form.sphere !== CUSTOM.id);
-    },
-    toggleCriterion(id) {
-      this.form.criteria = { ...this.form.criteria, [id]: !this.form.criteria[id] };
     },
     get visible() {
       const q = this.filter.trim().toLowerCase();
@@ -560,6 +558,7 @@ document.addEventListener('alpine:init', () => {
       this.clearFormError();
       this.citiesOpen = false;
       this.sphereMenuOpen = false;
+      this.criteriaOpen = false;
       if (this.form.sphere === CUSTOM.id && !this.form.query.trim()) {
         this.showFormError('query', 'Введите, что искать в 2ГИС, или выберите сферу');
         return;
@@ -590,6 +589,7 @@ document.addEventListener('alpine:init', () => {
       this.error = '';
       this.citiesOpen = false;
       this.sphereMenuOpen = false;
+      this.criteriaOpen = false;
       try {
         await api('/api/leads/resume', { limit: this.form.limit, headless: !this.form.showChrome });
       } catch (e) {

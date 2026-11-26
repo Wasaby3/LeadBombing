@@ -23,7 +23,7 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></symbol></svg>
 <a class="skip-link" href="#main">Перейти к содержимому</a>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; sphereMenuOpen = false; moreOpen = false; statusDeleteOpen = false; statusColorOpenId = null; statusEditId = null"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; sphereMenuOpen = false; criteriaOpen = false; moreOpen = false; statusDeleteOpen = false; statusColorOpenId = null; statusEditId = null"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -153,14 +153,19 @@
         <span x-text="searchLabel"></span>
       </button>
     </form>
-    <div class="criteria" role="group" aria-label="Критерии отсева" x-show="visibleCriteria.length">
-      <template x-for="c in visibleCriteria" :key="c.id">
-        <button type="button" role="checkbox" class="chip chip-check" :class="{ on: form.criteria[c.id] }"
-                :aria-checked="!!form.criteria[c.id]" :disabled="running" @click="toggleCriterion(c.id)">
-          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#check"/></svg>
-          <span x-text="c.label"></span>
-        </button>
-      </template>
+    <div class="field criteria" @click.outside="criteriaOpen = false" x-show="visibleCriteria.length">
+      <button type="button" class="select" :disabled="running" @click="criteriaOpen = !criteriaOpen"
+              aria-haspopup="true" :aria-expanded="criteriaOpen" aria-label="Отфильтровать выдачу">
+        <span>Отфильтровать</span>
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#chevron-down"/></svg>
+      </button>
+      <div class="popover" x-show="criteriaOpen" x-transition.origin.top>
+        <div class="city-list" role="group" aria-label="Что исключить из выдачи">
+          <template x-for="c in visibleCriteria" :key="c.id">
+            <label class="check"><input type="checkbox" x-model="form.criteria[c.id]" :disabled="running"><span x-text="c.label"></span></label>
+          </template>
+        </div>
+      </div>
     </div>
     <p class="field-error" id="form-error" role="alert" x-show="formError.text" x-text="formError.text"></p>
     <div class="subbar">
@@ -502,10 +507,11 @@
         <li><b>Уже в базе</b> — фирма есть в папке выгрузки с прошлых запусков.</li>
       </ol>
       <p>У «Свободного поиска» нет проверок рубрики и профиля: берутся все фирмы выдачи по вашему запросу.</p>
-      <p>Критерии «Сеть», «Нет телефона» и «Другой профиль» можно отключить чекбоксами («чипами» с галочкой) под
-        заголовком экрана поиска — по умолчанию все включены, то есть фильтрация такая же, как раньше. Город и
-        рубрика отключить нельзя — они определяют саму сферу поиска. Для «Свободного поиска» чип профиля не
-        показывается: эта проверка у него и так не применяется.</p>
+      <p>Проверки «Сеть», «Нет телефона» и «Другой профиль» можно отключить: кнопка «Отфильтровать» под строкой
+        поиска открывает список чекбоксов «Исключить сети и франшизы», «Исключить фирмы без телефона», «Исключить
+        непрофильные фирмы» — по умолчанию все включены, то есть фильтрация такая же, как раньше. Город и рубрика
+        отключить нельзя — они определяют саму сферу поиска. Для «Свободного поиска» пункт про непрофильные фирмы
+        не показывается: эта проверка у него и так не применяется.</p>
     </article>
 
     <article class="panel" id="docs-card">

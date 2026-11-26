@@ -73,9 +73,9 @@ class CriterionSpec:
 
 
 TOGGLEABLE_CRITERIA: tuple[CriterionSpec, ...] = (
-    CriterionSpec('chain', 'Сеть/франшиза'),
-    CriterionSpec('phone', 'Есть телефон'),
-    CriterionSpec('profile', 'Профильные фирмы'),
+    CriterionSpec('chain', 'Исключить сети и франшизы'),
+    CriterionSpec('phone', 'Исключить фирмы без телефона'),
+    CriterionSpec('profile', 'Исключить непрофильные фирмы'),
 )
 DEFAULT_ENABLED_CRITERIA: frozenset[str] = frozenset(c.id for c in TOGGLEABLE_CRITERIA)
 
