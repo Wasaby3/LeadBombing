@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +16,7 @@ from ..leads.firm import firm_id
 from ..leads.text import phone_digits
 from ..logger import logger
 from .lead_crm import CRM_FIELDS, NOT_WRITTEN, crm_of
+from .lead_statuses import LEAD_STATUS_FIELDS, check_deletable, seeded_rows
 
 DEFAULT_URL = 'http://127.0.0.1:55321'
 SCHEMA = 'leadbombing'  # own schema: on the server the Supabase is shared with another app
@@ -26,6 +28,7 @@ _RUN_FIELDS = 'id,sphere,query,cities,lead_limit,status,accepted,skipped,error,s
 _FOLDER_FIELDS = 'id,name,sphere,query,cities,created_at,demo_base_url,demo_filled_at,removed_worked,message_template'
 _FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
 _CRM_SELECT = ','.join(CRM_FIELDS)
+_LEAD_STATUS_SELECT = ','.join(LEAD_STATUS_FIELDS)
 _ONLY_LEADS = {'client_status': 'is.null'}  # a folder shows and exports leads, not clients
 _OWNER_SELECT = 'contacts:card->contacts,legal:card->legal'  # what the owner crown needs, not the whole card
 _PHONE_SEARCH_SELECT = f'folder_id,slug,client_status,name:summary->>name,{_OWNER_SELECT},folder:folders(name)'
@@ -129,6 +132,44 @@ class SupabaseStore:
                       params={'on_conflict': 'user_id,sphere,firm_id'},
                       prefer='resolution=merge-duplicates,return=minimal')
 
+    # --- Custom lead statuses (Настройки → «Статусы лидов») ---
+
+    def list_lead_statuses(self, token: str) -> list[dict]:
+        """The user's lead statuses, in picker order; the 6 builtin ones are seeded on first call."""
+        rows = self._request('GET', '/rest/v1/lead_statuses', token,
+                             params={'select': _LEAD_STATUS_SELECT, 'order': 'sort_order.asc'})
+        if rows:
+            return rows
+        self._request('POST', '/rest/v1/lead_statuses', token, json=seeded_rows(),
+                      params={'on_conflict': 'user_id,id'}, prefer='resolution=ignore-duplicates,return=minimal')
+        return seeded_rows()
+
+    def create_lead_status(self, token: str, name: str, color: str) -> dict:
+        existing = self.list_lead_statuses(token)
+        sort_order = max((s['sort_order'] for s in existing), default=-1) + 1
+        status_id = f'custom-{uuid.uuid4().hex[:10]}'
+        rows = self._request('POST', '/rest/v1/lead_statuses', token,
+                             json={'id': status_id, 'name': name, 'color': color, 'sort_order': sort_order},
+                             params={'select': _LEAD_STATUS_SELECT}, prefer='return=representation')
+        return rows[0]
+
+    def update_lead_status(self, token: str, status_id: str, fields: dict) -> Optional[dict]:
+        """Rename and/or recolor a status; None if there is no such status."""
+        self._request('PATCH', '/rest/v1/lead_statuses', token, json=fields, params={'id': f'eq.{status_id}'},
+                      prefer='return=minimal')
+        rows = self._request('GET', '/rest/v1/lead_statuses', token,
+                             params={'select': _LEAD_STATUS_SELECT, 'id': f'eq.{status_id}'})
+        return rows[0] if rows else None
+
+    def delete_lead_status(self, token: str, status_id: str) -> Optional[bool]:
+        """Delete a status, moving every lead that had it to the status that becomes default once it's gone (the
+        one with the smallest sort_order among what's left); None if there is no such status. Raises ValueError
+        (lead_statuses.check_deletable) if deletion isn't allowed."""
+        if not check_deletable(self.list_lead_statuses(token), status_id):
+            return None
+        self._request('POST', '/rest/v1/rpc/delete_lead_status', token, json={'p_id': status_id})
+        return True
+
     def list_runs(self, token: str, limit: int) -> list[dict]:
         return self._request('GET', '/rest/v1/runs', token,
                              params={'select': _RUN_FIELDS, 'order': 'started_at.desc', 'limit': str(limit)})
@@ -165,15 +206,15 @@ class SupabaseStore:
         return [{**{k: v for k, v in r.items() if k != 'folder_leads'},
                  'count': r['folder_leads'][0]['count'] if r['folder_leads'] else 0} for r in rows]
 
-    def add_to_folder(self, token: str, folder_id: int, leads: list[dict]) -> None:
+    def add_to_folder(self, token: str, folder_id: int, leads: list[dict], default_status: str = NOT_WRITTEN) -> None:
         """Insert leads ({slug, summary, card, raw, initial?}) in order; a lead already in the folder gets the new
-        snapshot and keeps the work on it (only the sent columns are merged). `initial` work fields (priority,
-        comment) are sent only for leads new to the folder."""
+        snapshot and keeps the work on it (only the sent columns are merged). A lead new to the folder starts with
+        `default_status` plus its `initial` work fields (priority, comment), if any."""
         known = {r['slug'] for r in self._request('GET', '/rest/v1/folder_leads', token, params={
             'select': 'slug', 'folder_id': f'eq.{folder_id}'})}
         base = datetime.now(timezone.utc)
         rows = [{**{k: v for k, v in lead.items() if k != 'initial'},
-                 **({} if lead['slug'] in known else lead.get('initial') or {}),
+                 **({} if lead['slug'] in known else {'status': default_status, **(lead.get('initial') or {})}),
                  'folder_id': folder_id, 'added_at': (base + timedelta(microseconds=i)).isoformat()}
                 for i, lead in enumerate(leads)]
         groups: dict[tuple[str, ...], list[dict]] = {}  # PostgREST wants the same columns in every row of a request

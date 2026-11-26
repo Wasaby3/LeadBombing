@@ -68,7 +68,7 @@ const focusablesIn = (root) => [...root.querySelectorAll(FOCUSABLE)].filter(isVi
 const WINDOWS = {
   selected: ['card', null], deleteOpen: ['deleteDialog', null], clearOpen: ['clearDialog', 'moreBtn'],
   exportOpen: ['exportDialog', null], saveOpen: ['saveDialog', null], workOpen: ['workDialog', null],
-  messageOpen: ['messageDialog', 'moreBtn'],
+  messageOpen: ['messageDialog', 'moreBtn'], statusDeleteOpen: ['statusDeleteDialog', null],
 };
 
 function loadForm(saved = store.get(FORM_KEY, {})) {
@@ -211,6 +211,7 @@ document.addEventListener('alpine:init', () => {
         }
       }
       await this.loadSettings();
+      await this.loadLeadStatuses();
       if (!this.sphere) this.form.sphere = 'bani';
       if (!this._hadForm && !this.form.query) this.form.query = this.sphere.query;  // first visit only
       this.searchForm = cloneForm(this.form);
@@ -892,5 +893,5 @@ document.addEventListener('alpine:init', () => {
     async openFolder() {
       await api('/api/leads/open-folder', { path: this.exportPath }).catch((e) => this.notify(e.message));
     },
-  }, crmPart(), workPart(), messagePart()));
+  }, crmPart(), statusesPart(), workPart(), messagePart()));
 });

@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/static/app/gnome/gnome.css">
 <script src="/static/app/vendor/motion-11.11.13.js"></script>
 <script src="/static/app/crm.js"></script>
+<script src="/static/app/statuses.js"></script>
 <script src="/static/app/work.js"></script>
 <script src="/static/app/message.js"></script>
 <script src="/static/app/app.js"></script>
@@ -22,7 +23,7 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></symbol></svg>
 <a class="skip-link" href="#main">Перейти к содержимому</a>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false; statusDeleteOpen = false; statusColorOpenId = null; statusEditId = null"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -302,7 +303,7 @@
                   <button type="button" class="title row-open" @click.stop="openCard(l.slug, l.folder_id)" x-text="l.name"></button>
                 </div>
               </td>
-              <td x-show="onLeads"><span class="st" :class="statusOf(l.status).id" x-text="statusOf(l.status).title"></span></td>
+              <td x-show="onLeads"><span class="st" :style="{ '--c': statusColorVar(statusOf(l.status).color) }" x-text="statusOf(l.status).name"></span></td>
               <td x-show="onClients"><span class="st" :class="clientStatusOf(l.client_status).id" x-text="clientStatusOf(l.client_status).title"></span></td>
               <td class="muted col-extra nowrap-col" x-show="onClients" x-text="l.folder"></td>
               <td class="muted col-extra nowrap-col" x-show="onClients" x-text="formatDate(l.client_since)"></td>
@@ -386,6 +387,45 @@
         </button>
       </div>
       <p class="muted small">Сюда «Выгрузить» записывает лиды; меню «Ещё» над таблицей открывает эту папку.</p>
+    </div>
+    <div class="panel">
+      <h2>Статусы лидов</h2>
+      <p class="muted small">Своё название и цвет для каждого статуса — до 9 штук. Первый в списке — статус по
+        умолчанию, с ним начинается новый сохранённый лид. Удаление статуса необратимо: лиды с ним перейдут на
+        новый первый статус.</p>
+      <div class="status-pick">
+        <template x-for="s in statuses" :key="s.id">
+          <div class="st-btn status-item" :style="{ '--c': statusColorVar(s.color) }"
+               @click.outside="statusColorOpenId === s.id && (statusColorOpenId = null)">
+            <button type="button" class="status-dot-btn" title="Цвет статуса" aria-label="Цвет статуса"
+                    :aria-expanded="statusColorOpenId === s.id" @click="toggleStatusColorPicker(s.id)"></button>
+            <span class="status-name" x-show="statusEditId !== s.id" @click="startEditStatusName(s)" x-text="s.name"></span>
+            <input x-show="statusEditId === s.id" type="text" class="status-name-input" :value="s.name"
+                   :size="Math.max(4, s.name.length + 1)" @input="onStatusNameInput(s, $event.target.value)"
+                   @blur="finishEditStatusName(s)" @keydown.enter="$event.target.blur()" @focus="$event.target.select()"
+                   x-effect="statusEditId === s.id && $nextTick(() => $el.focus())" maxlength="40"
+                   :aria-label="'Название статуса ' + s.name">
+            <button type="button" class="status-delete-btn" title="Удалить статус" x-show="!isProtectedStatus(s.id)"
+                    :disabled="statusesBusy" @click.stop="openDeleteStatus(s.id)">
+              <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#x"/></svg>
+            </button>
+            <div class="status-color-pop" x-show="statusColorOpenId === s.id" x-transition.origin.top.left role="group" aria-label="Выбор цвета">
+              <template x-for="c in statusPalette" :key="c.id">
+                <button type="button" class="swatch" :class="{ on: s.color === c.id }" :style="{ '--c': statusColorVar(c.id) }"
+                        :aria-label="'Цвет: ' + c.title" :aria-pressed="s.color === c.id"
+                        @click="recolorStatus(s, c.id)"></button>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="status-add-row">
+        <button type="button" class="status-add-btn" :disabled="!canAddStatus || statusesBusy" @click="addStatus()">
+          <span>Добавить статус</span>
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#plus"/></svg>
+        </button>
+      </div>
+      <p class="muted small" x-show="!canAddStatus">Больше 9 статусов нельзя.</p>
     </div>
   </section>
 
@@ -575,9 +615,10 @@
         на поиске — «Сообщение» и «Крючок». На странице «Сохранённые лиды» там же статус и приоритет, «Комментарий»,
         «Сообщение», «Крючок», «Демо-приложение» и «Уже связались»:</p>
       <ul>
-        <li><b>Статус</b> — вручную, один из шести: <span class="st not_written">Ещё не написал</span> (у нового лида)
-          <span class="st written">Написал</span> <span class="st in_progress">В работе</span>
-          <span class="st almost">Почти купил</span> <span class="st bought">Купил</span> <span class="st refused">Отказался</span>.</li>
+        <li><b>Статус</b> — вручную, из своего набора (до 10 статусов, каждый со своим названием и цветом — раздел
+          «Статусы лидов» в Настройках). По умолчанию шесть: «Ещё не написал» (у нового лида), «Написал», «В
+          работе», «Почти купил», «Купил», «Отказался» — их можно переименовать, перекрасить, удалить или добавить
+          к ним свои. Новый сохранённый лид получает статус, отмеченный «По умолчанию».</li>
         <li><b>Перевести в клиенты</b> — кнопка под статусами. Лид получает статус «Купил», уходит из папки (из таблицы,
           счётчика и выгрузки) и появляется на странице «Клиенты» (раздел 11). Обратной кнопки пока нет.</li>
         <li><b>Приоритет</b> — от 5 (очень высокий) до 1 (очень низкий) или «Нет». Новый лид получает его из оценки по
@@ -739,9 +780,10 @@
                     <div class="sub-label">Статус</div>
                     <div class="status-pick" role="radiogroup" aria-label="Статус лида" @keydown="radioKeys($event)">
                       <template x-for="s in statuses" :key="s.id">
-                        <button type="button" role="radio" class="st-btn" :class="s.id + (crm.status === s.id ? ' on' : '')"
+                        <button type="button" role="radio" class="st-btn" :class="{ on: crm.status === s.id }"
+                                :style="{ '--c': statusColorVar(s.color) }"
                                 :aria-checked="crm.status === s.id" :disabled="crmBusy" @click="setStatus(s.id)">
-                          <span class="dot"></span><span x-text="s.title"></span></button>
+                          <span class="dot"></span><span x-text="s.name"></span></button>
                       </template>
                     </div>
                     <div class="row to-client">
@@ -954,6 +996,22 @@
       <button type="button" class="btn danger" @click="clearLeads()">
         <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#eraser"/></svg>
         <span>Очистить поиск</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Delete a lead status (Настройки → «Статусы лидов») -->
+  <div class="scrim" x-show="statusDeleteOpen" x-transition.opacity @click="statusDeleteOpen = false"></div>
+  <div class="modal" x-show="statusDeleteOpen" x-transition x-ref="statusDeleteDialog" role="alertdialog" aria-modal="true"
+       aria-labelledby="status-delete-title" aria-describedby="status-delete-text" @keydown.tab="trapTab($event)">
+    <h2 id="status-delete-title" x-text="'Удалить статус «' + statusOf(statusDeleteId).name + '»?'"></h2>
+    <p class="muted" id="status-delete-text">Статус пропадёт из настроек. Лиды с этим статусом перейдут на статус по
+      умолчанию. Отменить это нельзя.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" data-autofocus @click="statusDeleteOpen = false">Отмена</button>
+      <button type="button" class="btn danger" :disabled="statusesBusy" @click="deleteStatus()">
+        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#trash-2"/></svg>
+        <span x-text="statusesBusy ? 'Удаляем…' : 'Удалить статус'"></span>
       </button>
     </div>
   </div>

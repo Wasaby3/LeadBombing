@@ -139,7 +139,9 @@ def register(app: Any, job: LeadsJob) -> None:
                     store.update_folder(token, folder_id, {'cities': cities})
             slugs = folder_slugs(store.folder_firms(token, target['id']),
                                  [(r['slug'], firm_id(r['item'])) for r in raw])
-            store.add_to_folder(token, target['id'], [with_slug(lead, slugs[lead['slug']]) for lead in leads])
+            default_status = store.list_lead_statuses(token)[0]['id']  # the smallest sort_order is the default
+            store.add_to_folder(token, target['id'], [with_slug(lead, slugs[lead['slug']]) for lead in leads],
+                                default_status)
             _store_heroes(target['id'], [{**r, 'slug': slugs[r['slug']]} for r in raw])
             return jsonify({'ok': True, 'folder': {'id': target['id'], 'name': target['name']}, 'saved': len(leads)})
         return with_store(save)
@@ -187,12 +189,15 @@ def register(app: Any, job: LeadsJob) -> None:
     def folders_item_update(folder_id: int, slug: str):
         if not _SLUG_RE.match(slug):
             return fail('Лид не найден', 404)
-        try:
-            fields = parse_patch(request.get_json(silent=True))
-        except ValueError as e:
-            return fail(str(e))
+        data = request.get_json(silent=True)
 
         def update(store: Any, token: str):
+            try:
+                wants_status = isinstance(data, dict) and 'status' in data
+                valid = {s['id'] for s in store.list_lead_statuses(token)} if wants_status else None
+                fields = parse_patch(data, valid)
+            except ValueError as e:
+                return fail(str(e))
             crm = store.update_folder_lead(token, folder_id, slug, fields)
             missing = 'Клиент не найден' if 'client_status' in fields else 'Лид не найден'
             return jsonify({'ok': True, 'crm': crm}) if crm is not None else fail(missing, 404)

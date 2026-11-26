@@ -3,15 +3,22 @@ import pytest
 
 from leadbombing.web.lead_crm import DEFAULT_CRM, MAX_COMMENT, parse_base_url, parse_patch
 
+LEAD_STATUSES = frozenset({'not_written', 'written', 'in_progress', 'almost', 'bought', 'refused'})
+
 
 def test_default_is_a_lead_not_written_to_without_priority_or_demo():
     assert DEFAULT_CRM == {'status': 'not_written', 'priority': 0, 'comment': '', 'contacted': [],
                            'demo_url': None, 'demo_source': None, 'client_status': None, 'client_since': None}
 
 
-@pytest.mark.parametrize('status', ['not_written', 'written', 'in_progress', 'almost', 'bought', 'refused'])
+@pytest.mark.parametrize('status', sorted(LEAD_STATUSES))
 def test_accepts_every_lead_status(status):
-    assert parse_patch({'status': status}) == {'status': status}
+    assert parse_patch({'status': status}, LEAD_STATUSES) == {'status': status}
+
+
+def test_status_is_unknown_without_the_caller_s_valid_set():
+    with pytest.raises(ValueError, match='Неизвестный статус'):
+        parse_patch({'status': 'not_written'})  # a custom id is only valid for its own user — the caller must pass it
 
 
 @pytest.mark.parametrize('client_status', ['ok', 'question', 'bug'])
@@ -21,7 +28,7 @@ def test_accepts_every_client_status(client_status):
 
 def test_accepts_known_fields_and_cleans_them():
     patch = parse_patch({'status': 'almost', 'priority': 5, 'comment': '  перезвонить в пятницу \n',
-                         'contacted': [{'title': 'WhatsApp', 'value': '+7 900 000-00-00'}]})
+                         'contacted': [{'title': 'WhatsApp', 'value': '+7 900 000-00-00'}]}, LEAD_STATUSES)
     assert patch == {'status': 'almost', 'priority': 5, 'comment': 'перезвонить в пятницу',
                      'contacted': [{'title': 'WhatsApp', 'value': '+7 900 000-00-00'}]}
 

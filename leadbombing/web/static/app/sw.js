@@ -1,6 +1,6 @@
 /* App shell cache: network first, cache as offline fallback. API calls are never cached. */
-const CACHE = 'lb-shell-v14';
-const SHELL = ['/search', '/static/app/app.css', '/static/app/crm.js', '/static/app/work.js', '/static/app/message.js', '/static/app/app.js', '/static/app/icon.svg', '/static/app/vendor/icons.svg',
+const CACHE = 'lb-shell-v16';
+const SHELL = ['/search', '/static/app/app.css', '/static/app/crm.js', '/static/app/statuses.js', '/static/app/work.js', '/static/app/message.js', '/static/app/app.js', '/static/app/icon.svg', '/static/app/vendor/icons.svg',
   '/static/app/vendor/alpine-3.14.1.min.js', '/static/app/vendor/motion-11.11.13.js', '/manifest.webmanifest',
   '/static/app/gnome/gnome.css', '/static/app/gnome/main.js', '/static/app/gnome/brain.js', '/static/app/gnome/phrases.js',
   '/static/app/gnome/commands.js', '/static/app/gnome/actions.js', '/static/app/gnome/bubble.js', '/static/app/gnome/scene.js', '/static/app/gnome/gnome.svg',

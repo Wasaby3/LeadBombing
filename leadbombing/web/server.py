@@ -17,6 +17,7 @@ from .classic_api import register as register_classic
 from .clients_api import register as register_clients
 from .folders_api import register as register_folders
 from .leads_api import register as register_leads
+from .statuses_api import register as register_statuses
 from .supabase import store_from_env
 from .work_api import register as register_work
 
@@ -64,6 +65,7 @@ def create_app(store: Optional[Any] = None, secret_key: Optional[str] = None):
                       SESSION_COOKIE_SAMESITE='Lax', PERMANENT_SESSION_LIFETIME=timedelta(days=_SESSION_DAYS))
     register_auth(app, Accounts(store or store_from_env()))
     register_account(app)
+    register_statuses(app)
     leads_job = register_leads(app, _load_cities)
     register_folders(app, leads_job)
     register_clients(app)

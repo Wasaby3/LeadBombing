@@ -11,6 +11,7 @@ from leadbombing.leads.contacts import card_owner_mark, phone_matches
 from leadbombing.leads.firm import firm_id
 from leadbombing.leads.text import phone_digits
 from leadbombing.web.lead_crm import DEFAULT_CRM, NOT_WRITTEN, crm_of
+from leadbombing.web.lead_statuses import check_deletable, seeded_rows
 from leadbombing.web.supabase import AccessDenied, InvalidCredentials, Session, SessionExpired, StoreError, client_row
 
 ADMIN_ID = 'a0000000-0000-4000-8000-000000000001'
@@ -20,6 +21,7 @@ TOKEN_TTL_S = 3600
 class FakeStore:
     def __init__(self) -> None:
         self.settings: dict[str, dict] = {}
+        self.lead_statuses: list[dict] = []
         self.runs: list[dict] = []
         self.leads: dict[tuple, dict] = {}
         self.folders: dict[int, dict] = {}
@@ -92,6 +94,41 @@ class FakeStore:
         self._write(token)
         self.leads[(lead['sphere'], lead['firm_id'])] = copy.deepcopy(lead)
 
+    def list_lead_statuses(self, token: str) -> list[dict]:
+        self._check(token)
+        if not self.lead_statuses:
+            self.lead_statuses = seeded_rows()
+        return copy.deepcopy(self.lead_statuses)
+
+    def create_lead_status(self, token: str, name: str, color: str) -> dict:
+        self._write(token)
+        existing = self.list_lead_statuses(token)
+        sort_order = max((s['sort_order'] for s in existing), default=-1) + 1
+        status_id = f'custom-{next(self._ids)}'
+        row = {'id': status_id, 'name': name, 'color': color, 'sort_order': sort_order}
+        self.lead_statuses.append(row)
+        return copy.deepcopy(row)
+
+    def update_lead_status(self, token: str, status_id: str, fields: dict) -> Optional[dict]:
+        self._write(token)
+        if not any(s['id'] == status_id for s in self.lead_statuses):
+            return None
+        self.lead_statuses = [{**s, **fields} if s['id'] == status_id else s for s in self.lead_statuses]
+        return copy.deepcopy(next(s for s in self.lead_statuses if s['id'] == status_id))
+
+    def delete_lead_status(self, token: str, status_id: str) -> Optional[bool]:
+        self._write(token)
+        if not check_deletable(self.list_lead_statuses(token), status_id):
+            return None
+        remaining = sorted((s for s in self.lead_statuses if s['id'] != status_id), key=lambda s: s['sort_order'])
+        fallback = remaining[0]['id']
+        self.lead_statuses = remaining
+        for items in self.folder_items.values():
+            for slug, row in items.items():
+                if row['status'] == status_id:
+                    items[slug] = {**row, 'status': fallback}
+        return True
+
     def list_runs(self, token: str, limit: int) -> list[dict]:
         self._check(token)
         return copy.deepcopy(self.runs[:limit])
@@ -130,14 +167,14 @@ class FakeStore:
         """The folder's leads, not its clients."""
         return [r for r in self.folder_items.get(folder_id, {}).values() if r['client_status'] is None]
 
-    def add_to_folder(self, token: str, folder_id: int, leads: list[dict]) -> None:
+    def add_to_folder(self, token: str, folder_id: int, leads: list[dict], default_status: str = NOT_WRITTEN) -> None:
         self._write(token)
         items = self.folder_items[folder_id]
         for lead in leads:
             snapshot = {k: v for k, v in lead.items() if k != 'initial'}
             old = items.pop(lead['slug'], None)  # a re-added lead moves to the end, like a newer added_at
             # the snapshot is replaced, the work on the lead is kept; a new lead starts with its `initial` work
-            work = crm_of(old) if old else {**DEFAULT_CRM, **(lead.get('initial') or {})}
+            work = crm_of(old) if old else {**DEFAULT_CRM, 'status': default_status, **(lead.get('initial') or {})}
             items[lead['slug']] = {**copy.deepcopy(work), **copy.deepcopy(snapshot)}
 
     def folder_firms(self, token: str, folder_id: int) -> dict[str, str]:

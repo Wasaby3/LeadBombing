@@ -25,6 +25,9 @@
   --st-active: #2b6fd6;
   --st-warm: #dd6b20;
   --st-bad: #d93f3f;
+  --st-purple: #8452d5;
+  --st-teal: #0f9b8e;
+  --st-pink: #d1398a;
   --prio-cold: #3b82f6;
   --prio-hot: #e03131;
   --prio-tint: 12%;
@@ -53,6 +56,9 @@
     --st-active: #5c9df2;
     --st-warm: #f2913d;
     --st-bad: #f06060;
+    --st-purple: #a78bfa;
+    --st-teal: #2dd4bf;
+    --st-pink: #f472b6;
     --prio-cold: #4f8ff7;
     --prio-hot: #f25f5f;
     --prio-tint: 16%;
@@ -79,6 +85,9 @@
   --st-active: #5c9df2;
   --st-warm: #f2913d;
   --st-bad: #f06060;
+  --st-purple: #a78bfa;
+  --st-teal: #2dd4bf;
+  --st-pink: #f472b6;
   --prio-cold: #4f8ff7;
   --prio-hot: #f25f5f;
   --prio-tint: 16%;
@@ -415,12 +424,12 @@ details.block summary { cursor: pointer; color: var(--muted); }
   font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--c);
   background: color-mix(in srgb, var(--c) 13%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
 .st::before, .st-btn .dot { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; }
-/* Lead: not_written stays muted. Client: ok, question, bug. */
-.st.written, .st-btn.written, .st.question, .st-btn.question { --c: var(--st-wait); }
-.st.in_progress, .st-btn.in_progress { --c: var(--st-active); }
-.st.almost, .st-btn.almost { --c: var(--st-warm); }
-.st.bought, .st-btn.bought, .st.ok, .st-btn.ok { --c: var(--st-good); }
-.st.refused, .st-btn.refused, .st.bug, .st-btn.bug { --c: var(--st-bad); }
+/* Lead status color comes from its own `color` field (statusColorVar in statuses.js), set as the inline --c on
+   the element — a status can be renamed or deleted, so no fixed id ↔ color CSS class works here. Client statuses
+   stay fixed: ok, question, bug. */
+.st.question, .st-btn.question { --c: var(--st-wait); }
+.st.ok, .st-btn.ok { --c: var(--st-good); }
+.st.bug, .st-btn.bug { --c: var(--st-bad); }
 /* Priority 0–5: one mark right before the photo (no gap to it) — big flame 5, flame 4, sun 3, cloud 2, snowflake 1,
    dashed circle 0 — in the same heat colour as the row tint. */
 .prio-col { width: 1%; white-space: nowrap; }
@@ -466,6 +475,34 @@ tbody tr[class*="tint-"]:hover, tbody tr[class*="tint-"].active { background: va
 .st-btn.on { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); }
 .st-btn:disabled, .segmented button:disabled { cursor: progress; }
 .block .row.to-client { justify-content: flex-start; flex-wrap: wrap; gap: 6px 12px; margin: 10px 0 2px; }
+/* Настройки → «Статусы лидов»: сами статусы выглядят как пилюли статуса на «Сохранённых лидах» (.st-btn выше) —
+   отличие только в том, что по имени можно кликнуть и переименовать, а по кружку — открыть палитру. */
+.status-item { position: relative; cursor: default; }
+.status-dot-btn { width: 16px; height: 16px; margin: -4px; flex: none; display: grid; place-items: center;
+  border: 0; background: none; padding: 0; cursor: pointer; border-radius: 50%; }
+.status-dot-btn::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); transition: width .1s, height .1s; }
+.status-dot-btn:hover::after { width: 11px; height: 11px; }
+.status-name { cursor: text; }
+.status-item .status-name-input { height: 20px; padding: 0 4px; border: 1px solid var(--c); border-radius: 4px;
+  background: var(--bg); outline: none; font: inherit; color: inherit; }
+.status-delete-btn { opacity: 0; flex: none; width: 14px; height: 14px; display: grid; place-items: center;
+  border: 0; background: none; padding: 0; margin-left: -1px; color: inherit; cursor: pointer; transition: opacity .15s; }
+.status-delete-btn .icon { width: 12px; height: 12px; }
+.status-item:hover .status-delete-btn, .status-delete-btn:focus-visible { opacity: 1; }
+.status-delete-btn:disabled { opacity: .4; cursor: not-allowed; }
+/* Квадратный попап с палитрой: сетка 3×3 */
+.status-color-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 11; width: 108px; height: 108px;
+  padding: 8px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
+.swatch { --c: var(--muted); width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--c); cursor: pointer; padding: 0; transition: box-shadow .15s; }
+.swatch.on { box-shadow: 0 0 0 2px var(--c); }
+.status-add-row { display: flex; justify-content: flex-end; padding-top: 8px; }
+.status-add-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 6px 8px;
+  margin: -6px -8px; border-radius: 8px; color: var(--text); font-weight: 550; cursor: pointer; transition: background .15s, color .15s; }
+.status-add-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--accent); }
+.status-add-btn:disabled { opacity: .5; cursor: not-allowed; }
+.status-add-btn .icon { width: 16px; height: 16px; }
 .nowrap-col { white-space: nowrap; }
 .contacted { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
 .contacted .check { margin: 0 -8px; word-break: break-word; }

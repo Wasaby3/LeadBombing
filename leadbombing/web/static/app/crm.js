@@ -2,13 +2,8 @@
    demo app, comment, «Перевести в клиенты», delete. Part of the leadsApp component (merged in app.js by withParts);
    `this` is the component, `api`, `plural` and `notify` come from app.js. */
 
-/* Lead statuses in the order of the picker; a lead new to a folder has not been written to yet. */
-const STATUSES = [
-  { id: 'not_written', title: 'Ещё не написал' }, { id: 'written', title: 'Написал' },
-  { id: 'in_progress', title: 'В работе' }, { id: 'almost', title: 'Почти купил' },
-  { id: 'bought', title: 'Купил' }, { id: 'refused', title: 'Отказался' },
-];
-/* Client statuses on «Клиенты»: a lead made a client starts with «Всё ок». */
+/* Lead statuses come from the account (Настройки → «Статусы лидов», statuses.js): own name and color, up to ten.
+   Client statuses on «Клиенты» stay fixed: a lead made a client starts with «Всё ок». */
 const CLIENT_STATUSES = [
   { id: 'ok', title: 'Всё ок' }, { id: 'question', title: 'Есть вопрос' }, { id: 'bug', title: 'Срочный баг' },
 ];
@@ -32,7 +27,7 @@ function announceLead(type, folderId, slug, detail = {}) {
 
 function crmPart() {
   return {
-    statuses: STATUSES, clientStatuses: CLIENT_STATUSES, priorities: PRIORITIES,
+    clientStatuses: CLIENT_STATUSES, priorities: PRIORITIES,
     crm: null, draft: { comment: '', demoUrl: '' }, crmBusy: false, deleteOpen: false,
     clients: [], movingToClients: false,
 
@@ -41,7 +36,6 @@ function crmPart() {
     get onSaved() { return this.onLeads || this.onClients; },
     get isClient() { return !!this.crm?.client_status; },
     clientsWord(n) { return plural(n, CLIENT_WORDS); },
-    statusOf(id) { return STATUSES.find((s) => s.id === id) || STATUSES[0]; },
     clientStatusOf(id) { return CLIENT_STATUSES.find((s) => s.id === id) || CLIENT_STATUSES[0]; },
     priorityTitle(id) { return PRIORITIES.find((p) => p.id === (id || 0))?.title || 'Не задан'; },
     priorityIcon(id) { return `/static/app/vendor/icons.svg#${PRIORITIES.find((p) => p.id === (id || 0))?.icon || 'circle-dashed'}`; },

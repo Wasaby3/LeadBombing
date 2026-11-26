@@ -1,19 +1,20 @@
 """Work on a saved lead (the «Сохранённые лиды» page) or a client («Клиенты»): status, priority, comment, contacted
 channels, the demo app and, for a client, its client status.
 
-`parse_patch` checks a change from the UI before it goes to the database. The demo app's `demo_source` is
-`manual` for a URL typed by hand and `auto` for one put by «Проработать лиды» (base URL from `parse_base_url` plus
-the lead's slug, written by the store's `fill_demo_urls`).
+`parse_patch` checks a change from the UI before it goes to the database. A status is one of the user's own
+lead_statuses (see lead_statuses.py and statuses_api.py), so `parse_patch` needs the caller's current set of valid
+ids whenever `status` may be in the patch. The demo app's `demo_source` is `manual` for a URL typed by hand and
+`auto` for one put by «Проработать лиды» (base URL from `parse_base_url` plus the lead's slug, written by the
+store's `fill_demo_urls`).
 A lead becomes a client only through the store's `make_client` (status «Купил», client status «Всё ок»);
 `client_status` is None for a lead.
 """
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Optional
+from typing import AbstractSet, Any, Callable, Optional
 
-STATUSES = ('not_written', 'written', 'in_progress', 'almost', 'bought', 'refused')
-NOT_WRITTEN = STATUSES[0]  # «Ещё не написал»: any other status counts in «Написали»
+NOT_WRITTEN = 'not_written'  # «Ещё не написал»: any other status counts in «Написали» (lead_statuses.PROTECTED_IDS)
 CLIENT_STATUSES = ('ok', 'question', 'bug')  # «Всё ок», «Есть вопрос», «Срочный баг»
 MAX_PRIORITY = 5  # 0 not set, 1 very low … 5 very high (see leads/booking.py for the automatic one)
 MAX_COMMENT = 5000
@@ -28,8 +29,8 @@ DEFAULT_CRM: dict[str, Any] = {'status': NOT_WRITTEN, 'priority': 0, 'comment': 
                                'demo_url': None, 'demo_source': None, 'client_status': None, 'client_since': None}
 
 
-def _status(value: Any) -> dict:
-    if value not in STATUSES:
+def _status(value: Any, valid_ids: AbstractSet[str]) -> dict:
+    if value not in valid_ids:
         raise ValueError('Неизвестный статус лида')
     return {'status': value}
 
@@ -115,20 +116,22 @@ def parse_message_template(value: Any) -> Optional[str]:
 
 
 _PARSERS: dict[str, Callable[[Any], dict]] = {
-    'status': _status, 'client_status': _client_status, 'priority': _priority, 'comment': _comment,
+    'client_status': _client_status, 'priority': _priority, 'comment': _comment,
     'contacted': _contacted, 'demo_url': _demo_url}
+_FIELDS = (*_PARSERS, 'status')
 
 
-def parse_patch(data: Any) -> dict:
-    """Checked database fields for a change from the UI; ValueError with a Russian message otherwise."""
+def parse_patch(data: Any, valid_statuses: Optional[AbstractSet[str]] = None) -> dict:
+    """Checked database fields for a change from the UI; ValueError with a Russian message otherwise.
+    `valid_statuses` — the caller's current lead_statuses ids — is required whenever `status` may be in `data`."""
     if not isinstance(data, dict) or not data:
         raise ValueError('Нечего сохранять')
-    unknown = [k for k in data if k not in _PARSERS]
+    unknown = [k for k in data if k not in _FIELDS]
     if unknown:
         raise ValueError(f'Неизвестное поле: {unknown[0]}')
     patch: dict = {}
     for key, value in data.items():
-        patch = {**patch, **_PARSERS[key](value)}
+        patch = {**patch, **(_status(value, valid_statuses or frozenset()) if key == 'status' else _PARSERS[key](value))}
     return patch
 
 
