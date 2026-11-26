@@ -62,6 +62,8 @@ deploy() {
   remote "test -f $APP/.env" || die "Сначала scripts/deploy/server.sh setup"
   git archive --format=tar HEAD | remote "rm -rf $APP/src && mkdir -p $APP/src && tar -x -C $APP/src"
   scp -q "${SSH_OPTS[@]}" deploy/docker-compose.yml "$HOST:$APP/docker-compose.yml"
+  scp -q "${SSH_OPTS[@]}" deploy/leadbombing.caddy "$HOST:$SB/volumes/proxy/caddy/leadbombing.caddy"
+  remote "docker exec supabase-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile"
 
   step "3/6 Бэкап схемы leadbombing"
   remote "mkdir -p $APP/backups && docker exec supabase-db pg_dump -U postgres -n leadbombing | gzip > $APP/backups/\$(date +%F-%H%M%S)-$sha.sql.gz \

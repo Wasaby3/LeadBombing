@@ -1,0 +1,8 @@
+# Отдельный файл (не в общем Caddyfile бань), чтобы передеплой bani-pwa (npm run deploy:ru,
+# перезаписывает /opt/supabase/volumes/proxy/caddy/Caddyfile целиком) его не стирал: там есть
+# строка `import leadbombing.caddy` (scripts/deploy/ru/Caddyfile в репозитории bani-pwa).
+leadbombing.ru, www.leadbombing.ru {
+	reverse_proxy leadbombing:8666
+	encode zstd gzip
+	header -server
+}

@@ -17,6 +17,16 @@
 - Миграции применяются через `psql` в контейнере `supabase-db` с учётом в `leadbombing.schema_migrations`:
   `supabase db push` нельзя — учёт миграций Supabase общий с банями.
 
+## Домен
+
+Снаружи приложение доступно по **https://leadbombing.ru** (и `www.`) — тот же Caddy, что обслуживает bani-pwa
+(`supabase-caddy` в `/opt/supabase`), по внутренней docker-сети `supabase_default` на `leadbombing:8666`. Блок
+живёт в отдельном файле `/opt/supabase/volumes/proxy/caddy/leadbombing.caddy`, а не в общем Caddyfile бань —
+`scripts/deploy/server.sh` кладёт его на сервер и перезагружает Caddy при каждой выкладке (сам файл — `deploy/leadbombing.caddy`
+в этом репозитории). Общий Caddyfile подключает его строкой `import leadbombing.caddy`
+(`scripts/deploy/ru/Caddyfile` в репозитории bani-pwa), поэтому передеплой bani-pwa (`npm run deploy:ru`,
+перезаписывает общий Caddyfile целиком) его не стирает.
+
 ## Доступ (SSH-туннель)
 
 ```bash
