@@ -122,6 +122,21 @@
           </div>
         </div>
       </label>
+      <div class="field criteria" @click.outside="criteriaOpen = false" x-show="visibleCriteria.length">
+        <span id="criteria-label">Фильтр</span>
+        <button type="button" class="select" :disabled="running" @click="criteriaOpen = !criteriaOpen"
+                aria-haspopup="true" :aria-expanded="criteriaOpen" aria-labelledby="criteria-label">
+          <span>Отфильтровать</span>
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#chevron-down"/></svg>
+        </button>
+        <div class="popover" x-show="criteriaOpen" x-transition.origin.top>
+          <div class="city-list" role="group" aria-label="Что исключить из выдачи">
+            <template x-for="c in visibleCriteria" :key="c.id">
+              <label class="check"><input type="checkbox" x-model="form.criteria[c.id]" :disabled="running"><span x-text="c.label"></span></label>
+            </template>
+          </div>
+        </div>
+      </div>
       <div class="field city" @click.outside="citiesOpen = false">
         <span id="cities-label">Города</span>
         <button type="button" class="select" x-ref="cities" :disabled="running || !!sphere?.fixed_city"
@@ -153,20 +168,6 @@
         <span x-text="searchLabel"></span>
       </button>
     </form>
-    <div class="field criteria" @click.outside="criteriaOpen = false" x-show="visibleCriteria.length">
-      <button type="button" class="select" :disabled="running" @click="criteriaOpen = !criteriaOpen"
-              aria-haspopup="true" :aria-expanded="criteriaOpen" aria-label="Отфильтровать выдачу">
-        <span>Отфильтровать</span>
-        <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#chevron-down"/></svg>
-      </button>
-      <div class="popover" x-show="criteriaOpen" x-transition.origin.top>
-        <div class="city-list" role="group" aria-label="Что исключить из выдачи">
-          <template x-for="c in visibleCriteria" :key="c.id">
-            <label class="check"><input type="checkbox" x-model="form.criteria[c.id]" :disabled="running"><span x-text="c.label"></span></label>
-          </template>
-        </div>
-      </div>
-    </div>
     <p class="field-error" id="form-error" role="alert" x-show="formError.text" x-text="formError.text"></p>
     <div class="subbar">
       <span class="note" x-text="sphere?.note"></span>
