@@ -250,6 +250,33 @@ def test_export_refuses_a_slug_taken_by_another_firm_and_writes_nothing(client, 
     assert tree(out) == before
 
 
+def test_find_by_phone_matches_any_formatting_across_folders(client):
+    # Arrange: two folders, each with one of the fixture's leads («Усадьба Банная» has +7 958 775-20-88,
+    # «Хлебниковские бани» has 8 495 777-88-99)
+    first = saved_folder(client, ['usadba-bannaya'])
+    second = saved_folder(client, ['hlebnikovskie-bani'])
+
+    # Act & Assert: a differently formatted query still finds the right lead in the right folder
+    r = client.get('/api/leads/find-by-phone?phone=8(958)775-20-88').get_json()
+    assert r['ok'] and [(m['folder_id'], m['slug']) for m in r['matches']] == [(first, 'usadba-bannaya')]
+
+    r = client.get('/api/leads/find-by-phone?phone=%2B7 495 777 88 99').get_json()
+    assert [(m['folder_id'], m['slug']) for m in r['matches']] == [(second, 'hlebnikovskie-bani')]
+
+    # Assert: no match for an unrelated number, and a query too short to search by
+    assert client.get('/api/leads/find-by-phone?phone=79990000000').get_json()['matches'] == []
+    assert client.get('/api/leads/find-by-phone?phone=12345').get_json()['matches'] == []
+
+
+def test_find_by_phone_also_finds_a_client(client):
+    folder_id = saved_folder(client, ['usadba-bannaya'])
+    assert client.post(f'/api/folders/{folder_id}/item/usadba-bannaya/client', json={}).get_json()['ok']
+
+    r = client.get('/api/leads/find-by-phone?phone=79587752088').get_json()
+
+    assert len(r['matches']) == 1 and r['matches'][0]['is_client'] is True
+
+
 def test_worked_counter_keeps_clients_and_deleted_leads_with_work(client):
     # Arrange: a folder of three leads, none written to yet
     run(client, sphere='custom', query='бани', cities=['moscow', 'spb'])

@@ -4,6 +4,7 @@
    «Проработать лиды» (demo URLs of a folder's leads) in work.js, a folder's «Общее сообщение» in message.js. */
 const POLL_MS = 900;
 const SAVE_SETTINGS_MS = 800;
+const PHONE_SEARCH_DEBOUNCE_MS = 500;  // the filter looks like a phone number and is searched across every folder
 const TOAST_MS = 2600;
 const FORM_KEY = 'lb.form';  // the form of the last search started: unsent edits are dropped when leaving the page
 const PATH_KEY = 'lb.exportPath';
@@ -152,7 +153,7 @@ document.addEventListener('alpine:init', () => {
     citiesOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
     status: 'idle', error: '', log: '', cursor: 0,
     params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
-    leads: [], skipped: [], filter: '', showSkipped: false,
+    leads: [], skipped: [], filter: '', showSkipped: false, _phoneSearchTimer: null,
     selected: null, card: null, cardFolder: null,  // the folder of the open saved lead or client
     probeOpen: {},  // «Возможный контакт» opened per phone digits in the card
     exportOpen: false, exporting: false, exportPath: store.get(PATH_KEY, ''),
@@ -172,6 +173,7 @@ document.addEventListener('alpine:init', () => {
       this.$watch('form.query', () => this.formError.field === 'query' && this.clearFormError());
       this.$watch('form.cities', () => this.formError.field === 'cities' && this.clearFormError());
       this.$watch('form.sphere', () => this.clearFormError());
+      this.$watch('filter', (value) => this.onFilterChanged(value));
       for (const [flag, [ref, fallback]] of Object.entries(WINDOWS)) {
         this.$watch(flag, (open, was) => {
           if (open && !was) this.focusWindow(flag, ref);
@@ -295,6 +297,31 @@ document.addEventListener('alpine:init', () => {
       }
     },
     get folder() { return this.folders.find((f) => f.id === this.folderId); },
+
+    get filterPlaceholder() {
+      return this.onSaved ? 'Найти по названию, району или телефону…' : 'Найти по названию или району…';
+    },
+    /* The same filter also finds a saved lead by phone: once it looks like one (10+ digits, any formatting),
+       it is searched across every folder, by any contact of the lead (phone, WhatsApp, the «maybe owner» one,
+       …), not only the one currently open. */
+    onFilterChanged(value) {
+      clearTimeout(this._phoneSearchTimer);
+      if (this.onSaved && value.replace(/\D/g, '').length >= MIN_PHONE_DIGITS) {
+        this._phoneSearchTimer = setTimeout(() => this.searchByPhone(value), PHONE_SEARCH_DEBOUNCE_MS);
+      }
+    },
+    async searchByPhone(phone) {
+      try {
+        const { matches } = await api(`/api/leads/find-by-phone?phone=${encodeURIComponent(phone)}`);
+        if (this.filter !== phone || !matches.length) return;  // the filter moved on, or nothing found
+        const [first, ...rest] = matches;
+        if (rest.length) this.notify(`Найдено ${matches.length} лидов с этим номером — открываю «${first.name}»`);
+        await this.openCard(first.slug, first.folder_id);
+        this.filter = '';
+      } catch (e) {
+        if (e.status !== 401) this.notify(e.message);
+      }
+    },
 
     get sameSphereFolders() { return this.folders.filter((f) => f.sphere === this.form.sphere); },
     async openSave() {

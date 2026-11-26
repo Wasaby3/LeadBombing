@@ -1,6 +1,7 @@
 """Contacts of a 2GIS card: every contact kept, labels as in 2GIS (or a default), the owner first."""
-from leadbombing.leads.contacts import business_contacts, contact_book, contacts_of, owner_mark, reach_of
+from leadbombing.leads.contacts import business_contacts, contact_book, contacts_of, owner_mark, phone_matches, reach_of
 from leadbombing.leads.firm import owner_of_ip
+from leadbombing.leads.text import phone_digits
 
 
 def _item(*groups):
@@ -207,3 +208,34 @@ def test_owner_mark_skips_city_and_booking_numbers():
     booking = [{**booking[0], 'role': 'booking'}]
     assert owner_mark(booking, is_ip=True) == ''
     assert owner_mark([], is_ip=True) == ''
+
+
+def test_phone_matches_despite_different_formatting():
+    # Arrange: the book has the formatted phone, the query comes in typed free-hand
+    book = _book({'type': 'phone', 'value': '+74951112233'})
+
+    # Act & Assert
+    assert phone_matches(book, phone_digits('8 (495) 111-22-33'))['value'] == '+7 495 111-22-33'
+
+
+def test_phone_matches_any_contact_kind_not_only_phone():
+    # Arrange: the matching number is on WhatsApp, not on the «phone» contact
+    item = _item(_group({'type': 'phone', 'value': '+74951112233'}),
+                 _group({'type': 'whatsapp', 'url': 'https://wa.me/79161234567'}))
+    book = contact_book(item, 'для записи')
+
+    # Act
+    found = phone_matches(book, phone_digits('79161234567'))
+
+    # Assert
+    assert found is not None and found['type'] == 'whatsapp'
+
+
+def test_phone_matches_none_when_too_short_to_search_by():
+    book = _book({'type': 'phone', 'value': '+74951112233'})
+    assert phone_matches(book, phone_digits('111223')) is None
+
+
+def test_phone_matches_none_when_no_contact_fits():
+    book = _book({'type': 'phone', 'value': '+74951112233'})
+    assert phone_matches(book, phone_digits('+79991234567')) is None

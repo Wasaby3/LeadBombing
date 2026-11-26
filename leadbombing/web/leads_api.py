@@ -11,7 +11,7 @@ from ..leads.spheres import sphere_list
 from ..logger import logger
 from .account import RunRecorder
 from .leads_job import LeadsJob
-from .supabase import StoreError
+from .supabase import SessionExpired, StoreError
 
 _SLUG_RE = re.compile(r'^[a-z0-9_-]{1,60}$')
 _PICK_TIMEOUT_S = 300
@@ -139,6 +139,17 @@ def register(app: Any, load_cities: Callable[[], list[dict]]) -> LeadsJob:
             return fail('Лид не найден', 404)
         result = job.results.get(slug) or saved_card(slug)
         return jsonify(result) if result else fail('Лид не найден', 404)
+
+    @app.route('/api/leads/find-by-phone')
+    def leads_find_by_phone():
+        """Saved leads/clients, across every folder, whose contacts hold the given phone number."""
+        try:
+            matches = g.account.store.find_leads_by_phone(g.account.token(), request.args.get('phone', ''))
+        except SessionExpired as e:
+            return fail(str(e), 401)
+        except StoreError as e:
+            return fail(str(e), 503)
+        return jsonify({'ok': True, 'matches': matches})
 
     @app.route('/api/leads/item/<slug>/hero')
     def leads_hero(slug: str):

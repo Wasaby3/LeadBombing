@@ -199,6 +199,18 @@ def card_owner_mark(card: dict) -> str:
     return owner_mark(card.get('contacts') or [], bool((card.get('legal') or {}).get('owner')))
 
 
+_SEARCH_DIGITS = 10  # a shorter query is too unspecific to search a phone number by
+
+
+def phone_matches(book: Iterable[dict], query_digits: str) -> Optional[dict]:
+    """The first contact of `book` (any kind — a phone, WhatsApp, the «maybe owner» one, …) whose value is the
+    same phone number as `query_digits` (both normalized with `phone_digits`). None if nothing matches, or
+    `query_digits` is too short to search a phone number by."""
+    if len(query_digits) < _SEARCH_DIGITS:
+        return None
+    return next((c for c in book if phone_digits(c.get('value') or '') == query_digits), None)
+
+
 def _roles(book: Iterable[dict]) -> dict[tuple[str, str], str]:
     return {_key(c['type'], c['value']): c['role'] for c in book}
 

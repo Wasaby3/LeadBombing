@@ -10,8 +10,9 @@ from typing import Any, Optional
 
 import requests
 
-from ..leads.contacts import card_owner_mark
+from ..leads.contacts import card_owner_mark, phone_matches
 from ..leads.firm import firm_id
+from ..leads.text import phone_digits
 from ..logger import logger
 from .lead_crm import CRM_FIELDS, NOT_WRITTEN, crm_of
 
@@ -27,6 +28,7 @@ _FOLDER_CHUNK = 50  # leads per insert: raw firm data is tens of KB each
 _CRM_SELECT = ','.join(CRM_FIELDS)
 _ONLY_LEADS = {'client_status': 'is.null'}  # a folder shows and exports leads, not clients
 _OWNER_SELECT = 'contacts:card->contacts,legal:card->legal'  # what the owner crown needs, not the whole card
+_PHONE_SEARCH_SELECT = f'folder_id,slug,client_status,name:summary->>name,{_OWNER_SELECT},folder:folders(name)'
 
 
 def client_row(r: dict) -> dict:
@@ -257,6 +259,23 @@ class SupabaseStore:
         """[{slug, raw: {item, prices}}] of the folder's leads (not clients) in folder order, for export."""
         return self._request('GET', '/rest/v1/folder_leads', token, params={
             'select': 'slug,raw', **_ONLY_LEADS, 'folder_id': f'eq.{folder_id}', 'order': 'added_at.asc'})
+
+    def find_leads_by_phone(self, token: str, phone: str) -> list[dict]:
+        """Saved leads and clients, across every folder of the user, whose contacts hold `phone` (any contact,
+        matched with `phone_matches` — so a WhatsApp or «maybe owner» number counts too). [] for a query too short
+        to search by."""
+        digits = phone_digits(phone)
+        rows = self._request('GET', '/rest/v1/folder_leads', token, params={'select': _PHONE_SEARCH_SELECT})
+        found = []
+        for r in rows:
+            match = phone_matches(r.get('contacts') or [], digits)
+            if match:
+                found.append({
+                    'folder_id': r['folder_id'], 'slug': r['slug'], 'folder': r['folder']['name'],
+                    'name': r['name'], 'is_client': r['client_status'] is not None,
+                    'matched_contact': {'type': match['type'], 'value': match['value']},
+                })
+        return found
 
     # --- HTTP ---
 

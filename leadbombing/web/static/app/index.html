@@ -207,7 +207,7 @@
         </button>
       </div>
       <div class="results-actions">
-        <input class="filter" type="search" placeholder="Найти по названию или району…" aria-label="Найти по названию или району"
+        <input class="filter" type="search" :placeholder="filterPlaceholder" :aria-label="filterPlaceholder"
                autocomplete="off" x-model="filter" x-show="list.length">
         <button type="button" class="btn" x-show="onSearch && leads.length && !fromAccount" :disabled="running" @click="openSave()"
                 :title="running ? 'Сохранить можно после остановки поиска' : ''">

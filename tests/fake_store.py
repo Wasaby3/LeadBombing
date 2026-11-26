@@ -7,8 +7,9 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from leadbombing.leads.contacts import card_owner_mark
+from leadbombing.leads.contacts import card_owner_mark, phone_matches
 from leadbombing.leads.firm import firm_id
+from leadbombing.leads.text import phone_digits
 from leadbombing.web.lead_crm import DEFAULT_CRM, NOT_WRITTEN, crm_of
 from leadbombing.web.supabase import AccessDenied, InvalidCredentials, Session, SessionExpired, StoreError, client_row
 
@@ -207,6 +208,20 @@ class FakeStore:
     def folder_raw(self, token: str, folder_id: int) -> list[dict]:
         self._check(token)
         return [{'slug': r['slug'], 'raw': copy.deepcopy(r['raw'])} for r in self._leads_of(folder_id)]
+
+    def find_leads_by_phone(self, token: str, phone: str) -> list[dict]:
+        self._check(token)
+        found = []
+        for folder_id, items in self.folder_items.items():
+            for r in items.values():
+                match = phone_matches(r['card'].get('contacts') or [], phone_digits(phone))
+                if match:
+                    found.append({
+                        'folder_id': folder_id, 'slug': r['slug'], 'folder': self.folders[folder_id]['name'],
+                        'name': r['summary'].get('name'), 'is_client': r['client_status'] is not None,
+                        'matched_contact': {'type': match['type'], 'value': match['value']},
+                    })
+        return found
 
 
 def login(client: Any, password: str = 'admin') -> Any:
