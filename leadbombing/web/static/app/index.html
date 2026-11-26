@@ -105,16 +105,6 @@
     <h1 class="top-title">Поиск лидов</h1>
   </header>
 
-  <div class="criteria" role="group" aria-label="Критерии отсева" x-show="visibleCriteria.length">
-    <template x-for="c in visibleCriteria" :key="c.id">
-      <button type="button" role="checkbox" class="chip chip-check" :class="{ on: form.criteria[c.id] }"
-              :aria-checked="!!form.criteria[c.id]" :disabled="running" @click="toggleCriterion(c.id)">
-        <svg class="icon" aria-hidden="true" x-show="form.criteria[c.id]"><use href="/static/app/vendor/icons.svg#check"/></svg>
-        <span x-text="c.label"></span>
-      </button>
-    </template>
-  </div>
-
   <section class="search" aria-label="Параметры поиска">
     <form class="bar" @submit.prevent="submitSearch()" novalidate>
       <label class="field grow" @click.outside="sphereMenuOpen = false">
@@ -163,6 +153,15 @@
         <span x-text="searchLabel"></span>
       </button>
     </form>
+    <div class="criteria" role="group" aria-label="Критерии отсева" x-show="visibleCriteria.length">
+      <template x-for="c in visibleCriteria" :key="c.id">
+        <button type="button" role="checkbox" class="chip chip-check" :class="{ on: form.criteria[c.id] }"
+                :aria-checked="!!form.criteria[c.id]" :disabled="running" @click="toggleCriterion(c.id)">
+          <svg class="icon" aria-hidden="true"><use href="/static/app/vendor/icons.svg#check"/></svg>
+          <span x-text="c.label"></span>
+        </button>
+      </template>
+    </div>
     <p class="field-error" id="form-error" role="alert" x-show="formError.text" x-text="formError.text"></p>
     <div class="subbar">
       <span class="note" x-text="sphere?.note"></span>

@@ -196,7 +196,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: va
 .chip.on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .chip:disabled { cursor: not-allowed; }
 /* Filter chips (independent on/off criteria, not a radiogroup): a check glyph marks the active ones. */
-.criteria { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.criteria { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .chip-check .icon { width: 14px; height: 14px; margin-right: 2px; }
 .bar { display: flex; gap: 10px; align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
