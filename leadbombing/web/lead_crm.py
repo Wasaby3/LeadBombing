@@ -12,8 +12,6 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Optional
 
-from ..leads.spheres import NO_DEMO_URL
-
 STATUSES = ('not_written', 'written', 'in_progress', 'almost', 'bought', 'refused')
 NOT_WRITTEN = STATUSES[0]  # «Ещё не написал»: any other status counts in «Написали»
 CLIENT_STATUSES = ('ok', 'question', 'bug')  # «Всё ок», «Есть вопрос», «Срочный баг»
@@ -104,8 +102,8 @@ def parse_base_url(value: Any) -> str:
 
 
 def parse_message_template(value: Any) -> Optional[str]:
-    """A folder's «Общее сообщение» with the demo link's place marked by NO_DEMO_URL; None (the sphere's message) for
-    an empty text; ValueError with a Russian message otherwise."""
+    """A folder's «Общее сообщение», optionally with the demo link's place marked by NO_DEMO_URL; None (the sphere's
+    message) for an empty text; ValueError with a Russian message otherwise."""
     if not isinstance(value, str):
         raise ValueError('Сообщение должно быть текстом')
     text = value.strip()
@@ -113,8 +111,6 @@ def parse_message_template(value: Any) -> Optional[str]:
         return None
     if len(text) > MAX_MESSAGE:
         raise ValueError(f'Сообщение длиннее {MAX_MESSAGE} символов')
-    if NO_DEMO_URL not in text:
-        raise ValueError(f'Укажите место ссылки на демо: {NO_DEMO_URL} — кнопка «Вставить ссылку на демо»')
     return text
 
 

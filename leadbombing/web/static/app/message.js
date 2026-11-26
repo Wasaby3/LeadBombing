@@ -26,7 +26,6 @@ function messagePart() {
       field.dispatchEvent(new Event('input', { bubbles: true }));
     },
     messageError(text) {
-      if (text && !text.includes(DEMO_MARK)) return 'Укажите место ссылки на демо: кнопка «Вставить ссылку на демо»';
       if (text.length > MAX_MESSAGE) return `Сообщение длиннее ${MAX_MESSAGE} символов`;
       return '';
     },

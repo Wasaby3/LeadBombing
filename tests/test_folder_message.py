@@ -30,7 +30,6 @@ def test_parse_turns_an_empty_text_into_none():
 @pytest.mark.parametrize('value, message', [
     (None, 'текст'),
     (5, 'текст'),
-    ('Здравствуйте! Ссылки нет', 'место ссылки'),
     (NO_DEMO_URL + 'а' * MAX_MESSAGE, 'длиннее'),
 ])
 def test_parse_refuses_a_bad_text(value, message):
@@ -70,12 +69,12 @@ def test_an_empty_text_brings_back_the_sphere_message(client):  # noqa: F811
     assert card(client, folder_id, 'usadba-bannaya')['demo_message'] == BANI_DEMO_MESSAGE.format(demo_url=NO_DEMO_URL)
 
 
-def test_a_text_without_the_demo_link_mark_is_refused(client):  # noqa: F811
+def test_a_text_without_the_demo_link_mark_is_accepted(client):  # noqa: F811
     folder_id = saved_folder(client)
 
     r = set_message(client, folder_id, 'Здравствуйте!')
 
-    assert r.status_code == 400 and 'место ссылки' in r.get_json()['error']
+    assert r.get_json() == {'ok': True, 'message_template': 'Здравствуйте!'}
 
 
 def test_unknown_folder_is_404_and_a_guest_gets_401(client):  # noqa: F811
