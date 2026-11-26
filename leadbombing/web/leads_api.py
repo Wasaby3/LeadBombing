@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from ..leads.spheres import sphere_list
+from ..leads.spheres import DEFAULT_ENABLED_CRITERIA, TOGGLEABLE_CRITERIA, criteria_list, sphere_list
 from ..logger import logger
 from .account import RunRecorder
 from .leads_job import LeadsJob
@@ -34,6 +34,18 @@ def slugs_arg(data: dict) -> Optional[list[str]]:
     if slugs is not None and (not isinstance(slugs, list) or not all(_SLUG_RE.match(str(x)) for x in slugs)):
         raise ValueError('Неверный список лидов')
     return slugs
+
+
+def criteria_arg(data: dict) -> frozenset[str]:
+    """Enabled rejection criteria of a start request; a missing id defaults to enabled (today's behavior)."""
+    raw = data.get('criteria')
+    if raw is None:
+        return DEFAULT_ENABLED_CRITERIA
+    if not isinstance(raw, dict):
+        raise ValueError('Неверный список критериев отсева')
+    if any(c.id in raw and not isinstance(raw[c.id], bool) for c in TOGGLEABLE_CRITERIA):
+        raise ValueError('Неверный список критериев отсева')
+    return frozenset(c.id for c in TOGGLEABLE_CRITERIA if raw.get(c.id, True))
 
 
 def export_args(data: dict) -> tuple[Path, Optional[list[str]]]:
@@ -77,7 +89,7 @@ def register(app: Any, load_cities: Callable[[], list[dict]]) -> LeadsJob:
         cities = [{'code': c['code'], 'name': c['name'], 'domain': c['domain']}
                   for c in load_cities() if c.get('country_code') == 'ru']
         cities.sort(key=lambda c: (c['code'] not in ('moscow', 'spb'), c['name']))
-        return jsonify({'spheres': sphere_list(), 'cities': cities})
+        return jsonify({'spheres': sphere_list(), 'cities': cities, 'criteria': criteria_list()})
 
     @app.route('/api/leads/start', methods=['POST'])
     def leads_start():
@@ -91,7 +103,8 @@ def register(app: Any, load_cities: Callable[[], list[dict]]) -> LeadsJob:
         try:
             limit = min(_MAX_LIMIT, max(1, int(data.get('limit') or 100)))
             job.start(str(data.get('sphere') or 'bani'), cities, str(data.get('query') or ''), limit,
-                      headless=bool(data.get('headless', True)), recorder=RunRecorder(g.account))
+                      headless=bool(data.get('headless', True)), recorder=RunRecorder(g.account),
+                      enabled_criteria=criteria_arg(data))
         except (ValueError, RuntimeError) as e:
             return fail(str(e), 409 if isinstance(e, RuntimeError) else 400)
         return jsonify({'ok': True})

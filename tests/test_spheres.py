@@ -3,7 +3,8 @@ import json
 
 from leadbombing.leads import LeadsWriter
 from leadbombing.leads.generic import COLUMNS
-from leadbombing.leads.spheres import get_sphere, sphere_list
+from leadbombing.leads.spheres import BANI_RUBRIC, DEFAULT_ENABLED_CRITERIA, MAX_BRANCHES, BaniSphere
+from leadbombing.leads.spheres import criteria_list, get_sphere, sphere_list
 from test_leads_golden import FIXTURES, GOLDEN, run_bani, tree, _FixedDate
 import leadbombing.leads.writer as writer_mod
 
@@ -110,3 +111,57 @@ def test_lead_without_booking_data_has_no_priority(tmp_path):
 def test_sphere_list_has_bani_first():
     ids = [s['id'] for s in sphere_list()]
     assert ids[0] == 'bani' and {'auto', 'beauty', 'dental'} <= set(ids)
+
+
+def test_criteria_list_exposes_known_ids_and_labels():
+    criteria = criteria_list()
+    assert {c['id'] for c in criteria} == {'chain', 'phone', 'profile'}
+    assert all(c['label'] for c in criteria)
+    assert DEFAULT_ENABLED_CRITERIA == {c['id'] for c in criteria}
+
+
+def test_chain_criterion_rejects_firm_with_many_branches():
+    sphere = get_sphere('auto', [SPB])
+    item = _firm(org={'branch_count': MAX_BRANCHES})
+    assert sphere.filter_reason(item) == f'сеть от {MAX_BRANCHES} филиалов'
+
+
+def test_chain_criterion_can_be_disabled():
+    sphere = get_sphere('auto', [SPB], enabled_criteria=DEFAULT_ENABLED_CRITERIA - {'chain'})
+    item = _firm(org={'branch_count': MAX_BRANCHES})
+    assert sphere.filter_reason(item) is None
+
+
+def test_phone_criterion_rejects_firm_without_phone():
+    sphere = get_sphere('auto', [SPB])
+    item = _firm(contact_groups=[])
+    assert sphere.filter_reason(item) == 'нет телефона'
+
+
+def test_phone_criterion_can_be_disabled():
+    sphere = get_sphere('auto', [SPB], enabled_criteria=DEFAULT_ENABLED_CRITERIA - {'phone'})
+    item = _firm(contact_groups=[])
+    assert sphere.filter_reason(item) is None
+
+
+def test_template_profile_criterion_can_be_disabled():
+    # matches both the auto rubric_re ('ремонт') and exclude_re ('автомойк') so it reaches the profile check
+    item = _firm(rubrics=[{'kind': 'primary', 'name': 'Ремонт и автомойка'}])
+    assert get_sphere('auto', [SPB]).filter_reason(item) == 'другой профиль (магазин, мойка, обучение…)'
+    sphere = get_sphere('auto', [SPB], enabled_criteria=DEFAULT_ENABLED_CRITERIA - {'profile'})
+    assert sphere.filter_reason(item) is None
+
+
+def test_bani_profile_criterion_can_be_disabled():
+    item = _firm(rubrics=[{'kind': 'primary', 'name': BANI_RUBRIC}],
+                 adm_div=[{'type': 'city', 'name': 'Москва'}], name='Баня и фитнес-клуб')
+    assert BaniSphere().filter_reason(item) == 'фитнес / отель / бассейн / термы'
+    sphere = BaniSphere(enabled_criteria=DEFAULT_ENABLED_CRITERIA - {'profile'})
+    assert sphere.filter_reason(item) is None
+
+
+def test_get_sphere_ignores_unknown_criteria_ids():
+    # only 'chain' is explicitly enabled here, so 'phone' is treated as disabled (no implicit default)
+    sphere = get_sphere('auto', [SPB], enabled_criteria=frozenset({'chain', 'bogus'}))
+    item = _firm(contact_groups=[])
+    assert sphere.filter_reason(item) is None

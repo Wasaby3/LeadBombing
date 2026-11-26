@@ -71,10 +71,16 @@ const WINDOWS = {
   messageOpen: ['messageDialog', 'moreBtn'], statusDeleteOpen: ['statusDeleteDialog', null],
 };
 
+// Mirrors leads.spheres.TOGGLEABLE_CRITERIA (ids only, all default to enabled — today's filtering): a criterion
+// added there also needs an entry here, or an older saved form would leave it unchecked instead of defaulting on.
+const DEFAULT_CRITERIA = { chain: true, phone: true, profile: true };
+
 function loadForm(saved = store.get(FORM_KEY, {})) {
   const form = { sphere: 'bani', query: '', cities: ['moscow'], limit: 100, showChrome: false, ...saved };
   if (!Array.isArray(form.cities) || !form.cities.length) form.cities = [saved.city || 'moscow'];
   delete form.city;
+  // Merged by key, not replaced wholesale, so a criterion added later still defaults on for an older saved form.
+  form.criteria = { ...DEFAULT_CRITERIA, ...(saved.criteria || {}) };
   return form;
 }
 
@@ -83,9 +89,14 @@ function cloneForm(form) {
 }
 
 /* Field by field: Alpine tracks property reads, not JSON.stringify. */
+function sameCriteria(a, b) {
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  return [...keys].every((k) => !!a?.[k] === !!b?.[k]);
+}
+
 function sameForm(a, b) {
   return a.sphere === b.sphere && a.query === b.query && a.limit === b.limit && a.showChrome === b.showChrome
-    && [...a.cities].sort().join() === [...b.cities].sort().join();
+    && [...a.cities].sort().join() === [...b.cities].sort().join() && sameCriteria(a.criteria, b.criteria);
 }
 
 /* The gnome (gnome/main.js) shows for a signed-in user only. */
@@ -147,7 +158,7 @@ function withParts(base, ...parts) {
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('leadsApp', () => withParts({
-    meta: { spheres: [], cities: [] },
+    meta: { spheres: [], cities: [], criteria: [] },
     form: loadForm(),
     searchForm: loadForm(),  // what the table was searched with; `form` returns to it unless «Найти лиды» is pressed
     citiesOpen: false, sphereMenuOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
@@ -459,6 +470,13 @@ document.addEventListener('alpine:init', () => {
     get statusHint() { return this.canResume ? 'можно продолжить с того же места' : ''; },
     leadsWord(n) { return plural(n, LEAD_WORDS); },
     get sphereChoices() { return [...this.meta.spheres, CUSTOM]; },
+    /* 'profile' has no effect on the custom (free search) sphere — no rubric/exclude filter is registered for it. */
+    get visibleCriteria() {
+      return this.meta.criteria.filter((c) => c.id !== 'profile' || this.form.sphere !== CUSTOM.id);
+    },
+    toggleCriterion(id) {
+      this.form.criteria = { ...this.form.criteria, [id]: !this.form.criteria[id] };
+    },
     get visible() {
       const q = this.filter.trim().toLowerCase();
       const found = q ? this.list.filter((l) => `${l.name} ${l.district}`.toLowerCase().includes(q)) : this.list;
@@ -553,7 +571,7 @@ document.addEventListener('alpine:init', () => {
       try {
         await api('/api/leads/start', {
           sphere: this.form.sphere, query: this.form.query || this.sphere?.query, cities: this.searchCities,
-          limit: this.form.limit, headless: !this.form.showChrome,
+          limit: this.form.limit, headless: !this.form.showChrome, criteria: this.form.criteria,
         });
       } catch (e) {
         this.error = e.message;

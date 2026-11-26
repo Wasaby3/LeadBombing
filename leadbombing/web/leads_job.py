@@ -19,7 +19,7 @@ from ..leads import LeadsWriter
 from ..leads.contacts import card_owner_mark
 from ..leads.firm import firm_id
 from ..leads.writer import CARD_KEYS
-from ..leads.spheres import get_sphere
+from ..leads.spheres import DEFAULT_ENABLED_CRITERIA, get_sphere
 from ..logger import logger
 from ..parser import get_parser
 from ..paths import user_path
@@ -107,12 +107,14 @@ class LeadsJob:
                 and self._progress.city < len(self._plan.cities))
 
     def start(self, sphere_id: str, cities: list[dict], query: str, limit: int, headless: bool = True,
-              recorder: Optional[RunRecorder] = None) -> None:
+              recorder: Optional[RunRecorder] = None,
+              enabled_criteria: frozenset[str] = DEFAULT_ENABLED_CRITERIA) -> None:
         """Search `query` in every city (the bathhouse template is fixed to Moscow); `limit` firms per city.
 
-        `recorder` saves the run and its leads into the user's account.
+        `recorder` saves the run and its leads into the user's account. `enabled_criteria` are the rejection
+        criteria (see `leads.spheres.TOGGLEABLE_CRITERIA`) to filter by; a resume reuses the same sphere.
         """
-        sphere = get_sphere(sphere_id, cities, query)
+        sphere = get_sphere(sphere_id, cities, query, enabled_criteria)
         self._wait_stopped()
         with self._lock:
             if self.running:

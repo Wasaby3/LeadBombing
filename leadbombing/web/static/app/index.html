@@ -105,6 +105,16 @@
     <h1 class="top-title">Поиск лидов</h1>
   </header>
 
+  <div class="criteria" role="group" aria-label="Критерии отсева" x-show="visibleCriteria.length">
+    <template x-for="c in visibleCriteria" :key="c.id">
+      <button type="button" role="checkbox" class="chip chip-check" :class="{ on: form.criteria[c.id] }"
+              :aria-checked="!!form.criteria[c.id]" :disabled="running" @click="toggleCriterion(c.id)">
+        <svg class="icon" aria-hidden="true" x-show="form.criteria[c.id]"><use href="/static/app/vendor/icons.svg#check"/></svg>
+        <span x-text="c.label"></span>
+      </button>
+    </template>
+  </div>
+
   <section class="search" aria-label="Параметры поиска">
     <form class="bar" @submit.prevent="submitSearch()" novalidate>
       <label class="field grow" @click.outside="sphereMenuOpen = false">
@@ -493,6 +503,10 @@
         <li><b>Уже в базе</b> — фирма есть в папке выгрузки с прошлых запусков.</li>
       </ol>
       <p>У «Свободного поиска» нет проверок рубрики и профиля: берутся все фирмы выдачи по вашему запросу.</p>
+      <p>Критерии «Сеть», «Нет телефона» и «Другой профиль» можно отключить чекбоксами («чипами» с галочкой) под
+        заголовком экрана поиска — по умолчанию все включены, то есть фильтрация такая же, как раньше. Город и
+        рубрика отключить нельзя — они определяют саму сферу поиска. Для «Свободного поиска» чип профиля не
+        показывается: эта проверка у него и так не применяется.</p>
     </article>
 
     <article class="panel" id="docs-card">

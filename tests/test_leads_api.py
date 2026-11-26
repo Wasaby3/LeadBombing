@@ -34,6 +34,19 @@ class FakeParser:
             writer.write({'result': {'items': [item]}})
 
 
+class ChainFakeParser(FakeParser):
+    """A single bani-matching firm with 5 branches (the chain/franchise criterion), not from the shared fixture."""
+
+    def parse(self, writer):
+        item = {'id': 'chain1', 'name': 'Баня Сеть', 'address_name': 'ул. Сетевая, 1',
+                'adm_div': [{'type': 'city', 'name': 'Москва'}],
+                'rubrics': [{'kind': 'primary', 'name': 'Бани и сауны'}],
+                'org': {'branch_count': 5},
+                'contact_groups': [{'contacts': [{'type': 'phone', 'value': '+79990001122'}]}]}
+        writer.fetch_state = lambda path, expr: {'prices': None}
+        writer.write({'result': {'items': [item]}})
+
+
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(job_mod, 'get_parser', FakeParser)
@@ -110,3 +123,35 @@ def test_free_search_in_two_cities_exports_only_selected(client, tmp_path):
     assert [p.name for p in (out / 'tenants').iterdir()] == ['hlebnikovskie-bani']
     assert (out / 'outreach.csv').read_text('utf-8-sig').splitlines()[0] == ','.join(COLUMNS)
     assert client.post('/api/leads/export', json={'path': str(out), 'slugs': ['../x']}).status_code == 400
+
+
+def test_meta_exposes_toggleable_criteria(client):
+    meta = client.get('/api/leads/meta').get_json()
+    assert {c['id'] for c in meta['criteria']} == {'chain', 'phone', 'profile'}
+
+
+def test_default_criteria_still_rejects_a_chain_firm(client, monkeypatch):
+    monkeypatch.setattr(job_mod, 'get_parser', ChainFakeParser)
+    assert client.post('/api/leads/start', json={'sphere': 'bani', 'limit': 10}).get_json()['ok']
+    s = wait_done(client)
+    assert not [e for e in s['events'] if e['type'] == 'lead']
+    assert any(e['reason'].startswith('сеть') for e in s['events'] if e['type'] == 'skip')
+
+
+def test_disabling_chain_criterion_accepts_a_chain_firm(client, monkeypatch):
+    monkeypatch.setattr(job_mod, 'get_parser', ChainFakeParser)
+    r = client.post('/api/leads/start', json={'sphere': 'bani', 'limit': 10, 'criteria': {'chain': False}})
+    assert r.get_json()['ok']
+    s = wait_done(client)
+    assert len([e for e in s['events'] if e['type'] == 'lead']) == 1
+    assert not any(e['reason'].startswith('сеть') for e in s['events'] if e['type'] == 'skip')
+
+
+def test_invalid_criteria_payload_returns_400(client):
+    r = client.post('/api/leads/start', json={'sphere': 'bani', 'limit': 10, 'criteria': 'all'})
+    assert r.status_code == 400
+
+
+def test_non_boolean_criterion_value_returns_400(client):
+    r = client.post('/api/leads/start', json={'sphere': 'bani', 'limit': 10, 'criteria': {'chain': 'false'}})
+    assert r.status_code == 400

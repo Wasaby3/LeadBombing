@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from . import build as bani_build
 from . import generic
@@ -59,6 +59,54 @@ def _is_chain(item: dict) -> bool:
     return ((item.get('org') or {}).get('branch_count') or 1) >= MAX_BRANCHES
 
 
+# A rejection criterion: `None` for a structural check (always on, defines the sphere itself) or the id of a
+# toggleable one; the function returns the user-facing Russian reason, or None when the firm passes.
+Check = Callable[[dict], Optional[str]]
+CheckEntry = tuple[Optional[str], Check]
+
+
+@dataclass(frozen=True)
+class CriterionSpec:
+    """A toggleable rejection criterion, for the UI's filter chips."""
+    id: str
+    label: str
+
+
+TOGGLEABLE_CRITERIA: tuple[CriterionSpec, ...] = (
+    CriterionSpec('chain', 'Сеть/франшиза'),
+    CriterionSpec('phone', 'Есть телефон'),
+    CriterionSpec('profile', 'Профильные фирмы'),
+)
+DEFAULT_ENABLED_CRITERIA: frozenset[str] = frozenset(c.id for c in TOGGLEABLE_CRITERIA)
+
+
+def criteria_list() -> list[dict[str, Any]]:
+    """Toggleable rejection criteria for the UI; all enabled by default (today's filtering)."""
+    return [{'id': c.id, 'label': c.label} for c in TOGGLEABLE_CRITERIA]
+
+
+def _run_checks(checks: list[CheckEntry], enabled: frozenset[str], item: dict) -> Optional[str]:
+    """The first failing check's reason; a toggleable check whose id isn't in `enabled` is skipped.
+
+    Adding a new check only means appending an entry here — it can't change what an existing one returns.
+    """
+    for crit_id, check in checks:
+        if crit_id is not None and crit_id not in enabled:
+            continue
+        reason = check(item)
+        if reason:
+            return reason
+    return None
+
+
+def _chain_check(item: dict) -> Optional[str]:
+    return f'сеть от {MAX_BRANCHES} филиалов' if _is_chain(item) else None
+
+
+def _phone_check(item: dict) -> Optional[str]:
+    return None if _has_phone(item) else 'нет телефона'
+
+
 class BaniSphere:
     """Original bathhouse template: rubric «Бани и сауны», Moscow, halls from the prices tab."""
     id = 'bani'
@@ -72,20 +120,29 @@ class BaniSphere:
     from_prices_label = ('Залы из вкладки цен', 'заглушка «Парная»')
     cities = [MOSCOW]
 
+    def __init__(self, enabled_criteria: frozenset[str] = DEFAULT_ENABLED_CRITERIA) -> None:
+        self._enabled = enabled_criteria
+        self._checks: list[CheckEntry] = [
+            (None, self._city_check),
+            (None, self._rubric_check),
+            ('profile', self._profile_check),
+            ('chain', _chain_check),
+            ('phone', _phone_check),
+        ]
+
+    def _city_check(self, item: dict) -> Optional[str]:
+        return None if _city_of(item, self.cities) else 'не Москва'
+
+    def _rubric_check(self, item: dict) -> Optional[str]:
+        return None if _primary_rubric(item) == BANI_RUBRIC else f'основная рубрика не «{BANI_RUBRIC}»'
+
+    def _profile_check(self, item: dict) -> Optional[str]:
+        names = ' '.join(r.get('name') or '' for r in item.get('rubrics') or [])
+        matched = BANI_EXCLUDE_RE.search(names) or BANI_EXCLUDE_NAME_RE.search(item.get('name') or '')
+        return 'фитнес / отель / бассейн / термы' if matched else None
+
     def filter_reason(self, item: dict) -> Optional[str]:
-        if not _city_of(item, self.cities):
-            return 'не Москва'
-        rubrics = item.get('rubrics') or []
-        if _primary_rubric(item) != BANI_RUBRIC:
-            return f'основная рубрика не «{BANI_RUBRIC}»'
-        names = ' '.join(r.get('name') or '' for r in rubrics)
-        if BANI_EXCLUDE_RE.search(names) or BANI_EXCLUDE_NAME_RE.search(item.get('name') or ''):
-            return 'фитнес / отель / бассейн / термы'
-        if _is_chain(item):
-            return f'сеть от {MAX_BRANCHES} филиалов'
-        if not _has_phone(item):
-            return 'нет телефона'
-        return None
+        return _run_checks(self._checks, self._enabled, item)
 
     def build(self, item: dict, prices: Optional[dict], slug: str, hero: bool, today: date) -> dict[str, Any]:
         return bani_build.build(item, prices, slug, hero, today)
@@ -132,7 +189,8 @@ class TemplateSphere:
     fixed_city = None
     contact_label = LABEL_SERVICE_BOOKING
 
-    def __init__(self, template: Template, cities: list[dict]) -> None:
+    def __init__(self, template: Template, cities: list[dict],
+                 enabled_criteria: frozenset[str] = DEFAULT_ENABLED_CRITERIA) -> None:
         if not cities:
             raise ValueError('Выберите хотя бы один город')
         self.template = template
@@ -142,20 +200,31 @@ class TemplateSphere:
         self.note = CUSTOM_NOTE if template.id == CUSTOM_ID else TEMPLATE_NOTE
         self._rubric_re = re.compile(template.rubric_re, re.I) if template.rubric_re else None
         self._exclude_re = re.compile(template.exclude_re, re.I) if template.exclude_re else None
+        self._enabled = enabled_criteria
+        self._checks: list[CheckEntry] = [(None, self._city_check)]
+        if self._rubric_re:
+            self._checks.append((None, self._rubric_check))
+        if self._exclude_re:
+            self._checks.append(('profile', self._profile_check))
+        self._checks += [('chain', _chain_check), ('phone', _phone_check)]
+
+    def _city_check(self, item: dict) -> Optional[str]:
+        if _city_of(item, self.cities):
+            return None
+        return f'не {self.cities[0]["name"]}' if len(self.cities) == 1 else 'не из выбранных городов'
+
+    def _rubric_check(self, item: dict) -> Optional[str]:
+        assert self._rubric_re is not None
+        return None if self._rubric_re.search(_primary_rubric(item) or '') else f'основная рубрика не «{self.title}»'
+
+    def _profile_check(self, item: dict) -> Optional[str]:
+        assert self._exclude_re is not None
+        primary = _primary_rubric(item) or ''
+        matched = self._exclude_re.search(primary) or self._exclude_re.search(item.get('name') or '')
+        return 'другой профиль (магазин, мойка, обучение…)' if matched else None
 
     def filter_reason(self, item: dict) -> Optional[str]:
-        if not _city_of(item, self.cities):
-            return f'не {self.cities[0]["name"]}' if len(self.cities) == 1 else 'не из выбранных городов'
-        primary = _primary_rubric(item) or ''
-        if self._rubric_re and not self._rubric_re.search(primary):
-            return f'основная рубрика не «{self.title}»'
-        if self._exclude_re and (self._exclude_re.search(primary) or self._exclude_re.search(item.get('name') or '')):
-            return 'другой профиль (магазин, мойка, обучение…)'
-        if _is_chain(item):
-            return f'сеть от {MAX_BRANCHES} филиалов'
-        if not _has_phone(item):
-            return 'нет телефона'
-        return None
+        return _run_checks(self._checks, self._enabled, item)
 
     def build(self, item: dict, prices: Optional[dict], slug: str, hero: bool, today: date) -> dict[str, Any]:
         city = _city_of(item, self.cities) or self.cities[0]
@@ -178,13 +247,15 @@ def sphere_list() -> list[dict[str, Any]]:
 CUSTOM_ID = 'custom'
 
 
-def get_sphere(sphere_id: str = 'bani', cities: Optional[list[dict]] = None, query: str = ''):
+def get_sphere(sphere_id: str = 'bani', cities: Optional[list[dict]] = None, query: str = '',
+               enabled_criteria: frozenset[str] = DEFAULT_ENABLED_CRITERIA):
     """Sphere by id; template spheres need cities ([{code, name, domain}]).
 
     `custom` is a free search: any firm found by `query`, no rubric filter.
+    `enabled_criteria` are the ids of `TOGGLEABLE_CRITERIA` to reject by (default: all of them, today's filtering).
     """
     if sphere_id == 'bani':
-        return BaniSphere()
+        return BaniSphere(enabled_criteria)
     if sphere_id == CUSTOM_ID:
         if not query.strip():
             raise ValueError('Введите, что искать в 2ГИС')
@@ -193,4 +264,4 @@ def get_sphere(sphere_id: str = 'bani', cities: Optional[list[dict]] = None, que
         template = next((t for t in TEMPLATES if t.id == sphere_id), None)
         if template is None:
             raise ValueError(f'Неизвестная сфера: {sphere_id}')
-    return TemplateSphere(template, cities or [MOSCOW])
+    return TemplateSphere(template, cities or [MOSCOW], enabled_criteria)
