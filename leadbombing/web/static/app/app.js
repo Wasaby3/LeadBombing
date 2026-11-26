@@ -150,7 +150,7 @@ document.addEventListener('alpine:init', () => {
     meta: { spheres: [], cities: [] },
     form: loadForm(),
     searchForm: loadForm(),  // what the table was searched with; `form` returns to it unless «Найти лиды» is pressed
-    citiesOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
+    citiesOpen: false, sphereMenuOpen: false, cityFilter: '', picked: [], moreOpen: false, formError: NO_FORM_ERROR,
     status: 'idle', error: '', log: '', cursor: 0,
     params: null, resumable: false, busy: false, searchCleared: false, clearOpen: false, _hadForm: false,
     leads: [], skipped: [], filter: '', showSkipped: false, _phoneSearchTimer: null,
@@ -394,6 +394,7 @@ document.addEventListener('alpine:init', () => {
     restoreForm() {
       this.form = cloneForm(this.searchForm);
       this.citiesOpen = false;
+      this.sphereMenuOpen = false;
     },
     get formChanged() { return !sameForm(this.form, this.searchForm); },
     saveSettings() {
@@ -540,6 +541,7 @@ document.addEventListener('alpine:init', () => {
       this.error = '';
       this.clearFormError();
       this.citiesOpen = false;
+      this.sphereMenuOpen = false;
       if (this.form.sphere === CUSTOM.id && !this.form.query.trim()) {
         this.showFormError('query', 'Введите, что искать в 2ГИС, или выберите сферу');
         return;
@@ -569,6 +571,7 @@ document.addEventListener('alpine:init', () => {
     async resume() {
       this.error = '';
       this.citiesOpen = false;
+      this.sphereMenuOpen = false;
       try {
         await api('/api/leads/resume', { limit: this.form.limit, headless: !this.form.showChrome });
       } catch (e) {

@@ -23,7 +23,7 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crown" viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></symbol></svg>
 <a class="skip-link" href="#main">Перейти к содержимому</a>
-<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; moreOpen = false; statusDeleteOpen = false; statusColorOpenId = null; statusEditId = null"
+<div class="app" x-data="leadsApp" x-cloak @keydown.escape.window="messageOpen ? (messageOpen = false) : deleteOpen ? (deleteOpen = false) : closeCard(); exportOpen = false; saveOpen = false; workOpen = false; messageOpen = false; clearOpen = false; citiesOpen = false; sphereMenuOpen = false; moreOpen = false; statusDeleteOpen = false; statusColorOpenId = null; statusEditId = null"
      @lb-logout.window="onLoggedOut()">
 
   <main class="login" x-show="authChecked && !user">
@@ -106,18 +106,21 @@
   </header>
 
   <section class="search" aria-label="Параметры поиска">
-    <div class="spheres" role="radiogroup" aria-label="Сфера" @keydown="radioKeys($event)">
-      <template x-for="s in sphereChoices" :key="s.id">
-        <button type="button" role="radio" class="chip" :class="{ on: form.sphere === s.id }" :aria-checked="form.sphere === s.id"
-                :disabled="running" @click="pickSphere(s)" x-text="s.title"></button>
-      </template>
-    </div>
     <form class="bar" @submit.prevent="submitSearch()" novalidate>
-      <label class="field grow">
+      <label class="field grow" @click.outside="sphereMenuOpen = false">
         <span>Что ищем в 2ГИС</span>
         <input type="search" name="query" x-model="form.query" x-ref="query" placeholder="Например: лофт, караоке, фотостудия…"
-               :disabled="running" autocomplete="off" @focus="freeSearch()"
+               :disabled="running" autocomplete="off" @focus="freeSearch(); sphereMenuOpen = true"
+               aria-haspopup="listbox" :aria-expanded="sphereMenuOpen"
                :aria-invalid="formError.field === 'query'" :aria-describedby="formError.field === 'query' ? 'form-error' : null">
+        <div class="popover" x-show="sphereMenuOpen" x-transition.origin.top>
+          <div class="spheres" role="radiogroup" aria-label="Сфера" @keydown="radioKeys($event)">
+            <template x-for="s in sphereChoices" :key="s.id">
+              <button type="button" role="radio" class="chip" :class="{ on: form.sphere === s.id }" :aria-checked="form.sphere === s.id"
+                      :disabled="running" @click="pickSphere(s); sphereMenuOpen = false" x-text="s.title"></button>
+            </template>
+          </div>
+        </div>
       </label>
       <div class="field city" @click.outside="citiesOpen = false">
         <span id="cities-label">Города</span>
