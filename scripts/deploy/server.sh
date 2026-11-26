@@ -23,7 +23,8 @@ TABLES=(user_settings runs leads folders folder_leads)
 step() { printf '\n\033[1;33m▶ %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31m✘ %s\033[0m\n' "$*" >&2; exit 1; }
 # Одно SSH-подключение на всю выкладку: боты долбят порт 22, и sshd (MaxStartups) сбрасывает часть новых подключений.
-SSH_OPTS=(-o BatchMode=yes -o ControlMaster=auto -o "ControlPath=$HOME/.ssh/lb-%C" -o ControlPersist=120)
+SSH_OPTS=(-o BatchMode=yes -o ControlMaster=auto -o "ControlPath=$HOME/.ssh/lb-%C" -o ControlPersist=120 \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
 remote() { ssh "${SSH_OPTS[@]}" "$HOST" "$@"; }
 psql_remote() { remote "docker exec -i supabase-db psql -U postgres -v ON_ERROR_STOP=1 -q $*"; }
 
